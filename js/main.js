@@ -1,0 +1,651 @@
+(function () {
+  const STATE = {
+    MENU: 'menu',
+    GROUND: 'ground',
+    HANDLE: 'handle',
+    AIR: 'air',
+    ROPE_FLY: 'rope_fly',
+    ROPE_ATTACHED: 'rope_attached',
+    OVER: 'over',
+    PAUSED: 'paused',
+  };
+
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  let W = 800;
+  let H = 600;
+  let DPR = 1;
+
+  const world = NinjaWorld.createWorld();
+  const rope = NinjaRope.createRopeState();
+  let state = STATE.MENU;
+  let stateBeforePause = null;
+  let player = { x: 120, y: 200, vx: 0, vy: 0, move: 0, w: 12, feet: 24 };
+  let lastTime = 0;
+  let rafId = 0;
+  let elapsed = 0;
+  let runCoins = 0;
+  let attachedHandle = null;
+
+  const keys = Object.create(null);
+  const input = {
+    move: 0,
+    fire: false,
+    detach: false,
+    shorten: false,
+    lengthen: false,
+    aimDX: 0.7,
+    aimDY: -0.7,
+    aiming: false,
+  };
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = canvas.clientWidth || window.innerWidth;
+    H = canvas.clientHeight || window.innerHeight;
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+
+  function show(el, on) {
+    el.classList.toggle('hidden', !on);
+  }
+
+  function showPauseBtn(on) {
+    document.getElementById('pauseBtn').style.display = on ? 'block' : 'none';
+  }
+
+  function showControls(on) {
+    document.getElementById('controls').classList.toggle('visible', on);
+  }
+
+  function showSideButtons(on) {
+    document.querySelectorAll('.side-btn').forEach((b) => {
+      b.style.display = on ? 'flex' : 'none';
+    });
+  }
+
+  function updateHud() {
+    const dist = Math.floor(world.distance);
+    const dv = document.getElementById('distanceVal');
+    const cv = document.getElementById('coinVal');
+    const bv = document.getElementById('bestVal');
+    if (dv) dv.textContent = dist;
+    if (cv) cv.textContent = NinjaSkins.coins;
+    if (bv) bv.textContent = NinjaSkins.bestDistance;
+  }
+
+  function refreshHudLabels() {
+    const dist = Math.floor(world.distance);
+    document.getElementById('distanceChip').innerHTML = NinjaI18n.t('hud.distance', {
+      value: `<span id="distanceVal">${dist}</span>`,
+    });
+    document.getElementById('bestChip').innerHTML = NinjaI18n.t('hud.best', {
+      value: `<span id="bestVal">${NinjaSkins.bestDistance}</span>`,
+    });
+    document.getElementById('coinVal').textContent = NinjaSkins.coins;
+    document.getElementById('battleBtnLabel').textContent = NinjaI18n.t('side.battle');
+    document.getElementById('hideSeekBtnLabel').textContent = NinjaI18n.t('side.hideSeek');
+    document.getElementById('ctrlFire').textContent = NinjaI18n.t('controls.fire');
+    document.getElementById('ctrlShorten').textContent = NinjaI18n.t('controls.shorten');
+    document.getElementById('ctrlLengthen').textContent = NinjaI18n.t('controls.lengthen');
+    document.getElementById('ctrlDetach').textContent = NinjaI18n.t('controls.detach');
+  }
+
+  function resetRun() {
+    NinjaWorld.resetWorld(world, H);
+    Object.assign(rope, NinjaRope.createRopeState());
+    const startPlat = world.platforms[0];
+    player.x = startPlat.x + 60;
+    player.y = startPlat.y - player.feet;
+    player.vx = 0;
+    player.vy = 0;
+    player.move = 0;
+    attachedHandle = null;
+    runCoins = 0;
+    elapsed = 0;
+    lastTime = 0;
+  }
+
+  function goMenu() {
+    state = STATE.MENU;
+    show(document.getElementById('menuOverlay'), true);
+    show(document.getElementById('gameOverOverlay'), false);
+    show(document.getElementById('pauseOverlay'), false);
+    showPauseBtn(false);
+    showControls(false);
+    showSideButtons(true);
+    updateHud();
+  }
+
+  function startGame() {
+    resetRun();
+    state = STATE.GROUND;
+    show(document.getElementById('menuOverlay'), false);
+    show(document.getElementById('gameOverOverlay'), false);
+    show(document.getElementById('pauseOverlay'), false);
+    showPauseBtn(true);
+    showControls(true);
+    showSideButtons(false);
+    lastTime = 0;
+  }
+
+  function gameOver() {
+    if (state === STATE.OVER) return;
+    state = STATE.OVER;
+    NinjaSkins.updateBest(world.distance);
+    if (runCoins > 0) {
+      // already added on pickup
+    }
+    document.getElementById('finalScore').textContent = Math.floor(world.distance);
+    document.getElementById('bestScoreRow').innerHTML = NinjaI18n.t('gameOver.best', {
+      value: NinjaSkins.bestDistance,
+    });
+    show(document.getElementById('gameOverOverlay'), true);
+    showPauseBtn(false);
+    showControls(false);
+    showSideButtons(true);
+    updateHud();
+  }
+
+  function togglePause() {
+    if (state === STATE.OVER || state === STATE.MENU) return;
+    if (state === STATE.PAUSED) {
+      resumeFromPause();
+      return;
+    }
+    stateBeforePause = state;
+    state = STATE.PAUSED;
+    show(document.getElementById('pauseOverlay'), true);
+  }
+
+  function resumeFromPause() {
+    if (state !== STATE.PAUSED) return;
+    state = stateBeforePause || STATE.AIR;
+    show(document.getElementById('pauseOverlay'), false);
+    lastTime = 0;
+  }
+
+  function collectCoins() {
+    for (const c of world.coins) {
+      if (c.collected) {
+        if (c.popLife > 0) c.popLife -= 0.05;
+        continue;
+      }
+      const dx = player.x - c.x;
+      const dy = player.y - c.y;
+      if (dx * dx + dy * dy < 22 * 22) {
+        c.collected = true;
+        c.popLife = 1;
+        runCoins += 1;
+        NinjaSkins.addCoins(1);
+        updateHud();
+      }
+    }
+  }
+
+  function syncAim() {
+    if (input.aiming || Math.hypot(input.aimDX, input.aimDY) > 0.05) {
+      NinjaRope.setAimFromDir(rope, input.aimDX, input.aimDY);
+    } else if (!('ontouchstart' in window)) {
+      // mouse aim handled separately
+    }
+  }
+
+  function tryFire() {
+    if (state === STATE.ROPE_ATTACHED || state === STATE.ROPE_FLY) return;
+    if (state !== STATE.GROUND && state !== STATE.HANDLE && state !== STATE.AIR) return;
+    if (NinjaRope.fire(rope, player)) {
+      if (state === STATE.HANDLE) {
+        attachedHandle = null;
+      }
+      state = STATE.ROPE_FLY;
+    }
+  }
+
+  function tryDetach() {
+    if (state === STATE.ROPE_ATTACHED) {
+      NinjaRope.detach(rope, player);
+      state = STATE.AIR;
+      return;
+    }
+    if (state === STATE.HANDLE) {
+      attachedHandle = null;
+      player.vy = -320;
+      state = STATE.AIR;
+      return;
+    }
+    if (state === STATE.GROUND) {
+      player.vy = -420;
+      state = STATE.AIR;
+    }
+  }
+
+  function update(dt) {
+    if (state === STATE.MENU || state === STATE.OVER || state === STATE.PAUSED) return;
+
+    elapsed += dt;
+    player.move = input.move;
+    if (keys['a'] || keys['arrowleft']) player.move = -1;
+    if (keys['d'] || keys['arrowright']) player.move = 1;
+
+    rope.lengthInput = 0;
+    if (input.shorten || keys['w'] || keys['q'] || keys['arrowup']) rope.lengthInput = -1;
+    if (input.lengthen || keys['s'] || keys['e'] || keys['arrowdown']) rope.lengthInput = 1;
+
+    syncAim();
+    if (rope.cooldown > 0) rope.cooldown -= dt;
+
+    if (input.fire) {
+      input.fire = false;
+      tryFire();
+    }
+    if (input.detach) {
+      input.detach = false;
+      tryDetach();
+    }
+
+    NinjaWorld.updateCamera(world, dt, H);
+
+    if (state === STATE.ROPE_FLY) {
+      const hit = NinjaRope.updateProjectile(rope, world, dt);
+      // Still apply light gravity while shot is in air
+      player.vy += NinjaRope.GRAVITY * dt;
+      player.x += player.vx * dt;
+      player.y += player.vy * dt;
+      resolvePlatformLanding();
+      if (hit) {
+        NinjaRope.attachTo(rope, player, hit);
+        state = STATE.ROPE_ATTACHED;
+      } else if (!rope.projectile) {
+        state = STATE.AIR;
+      }
+    } else if (state === STATE.ROPE_ATTACHED) {
+      NinjaRope.updateAttached(rope, player, dt);
+      if (!rope.attached) state = STATE.AIR;
+    } else if (state === STATE.HANDLE && attachedHandle) {
+      player.x = attachedHandle.x;
+      player.y = attachedHandle.y + 8;
+      player.vx = 0;
+      player.vy = 0;
+    } else {
+      // GROUND or AIR
+      if (state !== STATE.GROUND) {
+        player.vy += NinjaRope.GRAVITY * dt;
+      } else {
+        player.vy = 0;
+        player.vx = player.move * 160;
+      }
+      if (state === STATE.AIR) {
+        player.vx += player.move * 520 * dt;
+        player.vx *= Math.pow(0.98, dt * 60);
+      }
+      player.x += player.vx * dt;
+      player.y += player.vy * dt;
+      resolvePlatformLanding();
+      tryGrabHandle();
+    }
+
+    collectCoins();
+
+    const sx = NinjaWorld.worldToScreen(world, player.x);
+    if (sx < -player.w || player.y - player.feet > H + 10) {
+      gameOver();
+    }
+  }
+
+  function resolvePlatformLanding() {
+    if (state === STATE.ROPE_ATTACHED || state === STATE.HANDLE) return;
+    if (player.vy < 0) return;
+    const plat = NinjaWorld.platformAt(world, player.x, player.y, player.w, player.feet);
+    if (plat) {
+      player.y = plat.y - player.feet;
+      player.vy = 0;
+      player.vx *= 0.5;
+      // Keep rope projectile in flight even while feet are on a platform
+      if (state !== STATE.ROPE_FLY) state = STATE.GROUND;
+    } else if (state === STATE.GROUND) {
+      state = STATE.AIR;
+    }
+  }
+
+  function tryGrabHandle() {
+    if (state === STATE.ROPE_ATTACHED || state === STATE.ROPE_FLY || state === STATE.HANDLE) return;
+    if (player.vy < -50) return; // only when falling / near
+    const h = NinjaWorld.handleAt(world, player.x, player.y - 8, 16);
+    if (h) {
+      attachedHandle = h;
+      state = STATE.HANDLE;
+      player.vx = 0;
+      player.vy = 0;
+    }
+  }
+
+  function draw() {
+    NinjaWorld.drawBackground(ctx, W, H, world);
+    NinjaWorld.drawWorld(ctx, world, W, H, elapsed);
+
+    const canAim =
+      state === STATE.GROUND ||
+      state === STATE.HANDLE ||
+      state === STATE.AIR ||
+      state === STATE.ROPE_FLY;
+    if (canAim && state !== STATE.MENU && state !== STATE.OVER) {
+      NinjaRope.drawAim(ctx, rope, player, world, W);
+    }
+    NinjaRope.drawRope(ctx, rope, player, world);
+
+    const sx = NinjaWorld.worldToScreen(world, player.x);
+    const skin = NinjaSkins.getCurrentSkin();
+    let pose = 'idle';
+    let angle = 0;
+    if (state === STATE.ROPE_ATTACHED) pose = 'rope';
+    if (state === STATE.HANDLE) pose = 'handle';
+    if (state === STATE.AIR || state === STATE.ROPE_FLY) {
+      angle = Math.atan2(player.vy, Math.abs(player.vx) + 1) * 0.15;
+    }
+    NinjaSkins.drawPlayer(ctx, sx, player.y, skin, { pose, angle, time: elapsed });
+
+    const danger = NinjaWorld.dangerFactor(sx, player.y, W, H);
+    NinjaWorld.drawDangerVignette(ctx, W, H, danger);
+
+    // Distance HUD number refresh without full re-i18n every frame
+    const dv = document.getElementById('distanceVal');
+    if (dv) dv.textContent = Math.floor(world.distance);
+  }
+
+  function loop(ts) {
+    if (!lastTime) lastTime = ts;
+    let dt = Math.min((ts - lastTime) / 1000, 0.033);
+    lastTime = ts;
+    update(dt);
+    draw();
+    rafId = requestAnimationFrame(loop);
+  }
+
+  // ---- Skins UI ----
+  function renderSkinGrid() {
+    const grid = document.getElementById('skinsGrid');
+    grid.innerHTML = '';
+    document.getElementById('skinsProgress').textContent = NinjaI18n.t('skins.progress', {
+      owned: NinjaSkins.ownedSkins.length,
+      total: NinjaSkins.SKINS.length,
+      coins: NinjaSkins.coins,
+    });
+    NinjaSkins.SKINS.forEach((skin) => {
+      const isOwned = NinjaSkins.isOwned(skin.id);
+      const isSelected = NinjaSkins.selectedSkinId === skin.id && isOwned;
+      const canAfford = NinjaSkins.coins >= skin.price;
+      const card = document.createElement('div');
+      card.className =
+        'skin-card' +
+        (isOwned || canAfford ? ' unlocked' : ' locked') +
+        (isSelected ? ' selected' : '');
+      const previewWrap = document.createElement('div');
+      previewWrap.style.cssText =
+        'background:rgba(255,255,255,0.12);border-radius:6px;padding:3px;margin-bottom:2px;';
+      const cnv = document.createElement('canvas');
+      cnv.className = 'skin-preview';
+      cnv.width = 36;
+      cnv.height = 44;
+      NinjaSkins.drawMiniNinja(cnv.getContext('2d'), skin);
+      previewWrap.appendChild(cnv);
+      card.appendChild(previewWrap);
+      const nameEl = document.createElement('div');
+      nameEl.className = 'skin-name';
+      nameEl.textContent = NinjaSkins.skinName(skin.id);
+      card.appendChild(nameEl);
+      const statusEl = document.createElement('div');
+      statusEl.className = 'skin-req';
+      if (isOwned) {
+        statusEl.textContent = isSelected ? NinjaI18n.t('skins.selected') : NinjaI18n.t('skins.select');
+        statusEl.style.color = isSelected ? '#d8a23a' : '#6fd86f';
+      } else {
+        statusEl.textContent = '🪙 ' + skin.price;
+        statusEl.style.color = canAfford ? '#ffd454' : '#a05a5a';
+      }
+      card.appendChild(statusEl);
+      card.addEventListener('click', () => {
+        if (isOwned) NinjaSkins.selectSkin(skin.id);
+        else if (canAfford) {
+          NinjaSkins.buySkin(skin.id);
+          NinjaSkins.selectSkin(skin.id);
+        }
+        renderSkinGrid();
+        updateHud();
+      });
+      grid.appendChild(card);
+    });
+  }
+
+  // ---- Input ----
+  function bindHold(el, onDown, onUp) {
+    const down = (e) => {
+      e.preventDefault();
+      onDown();
+    };
+    const up = (e) => {
+      e.preventDefault();
+      onUp();
+    };
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointerleave', up);
+    el.addEventListener('pointercancel', up);
+  }
+
+  function setupControls() {
+    bindHold(
+      document.getElementById('btnLeft'),
+      () => {
+        input.move = -1;
+      },
+      () => {
+        if (input.move < 0) input.move = 0;
+      }
+    );
+    bindHold(
+      document.getElementById('btnRight'),
+      () => {
+        input.move = 1;
+      },
+      () => {
+        if (input.move > 0) input.move = 0;
+      }
+    );
+    bindHold(
+      document.getElementById('btnShorten'),
+      () => {
+        input.shorten = true;
+      },
+      () => {
+        input.shorten = false;
+      }
+    );
+    bindHold(
+      document.getElementById('btnLengthen'),
+      () => {
+        input.lengthen = true;
+      },
+      () => {
+        input.lengthen = false;
+      }
+    );
+    document.getElementById('btnFire').addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      input.fire = true;
+    });
+    document.getElementById('btnDetach').addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      input.detach = true;
+    });
+
+    const pad = document.getElementById('aimPad');
+    const knob = document.getElementById('aimKnob');
+    function aimFromEvent(e) {
+      const rect = pad.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      let dx = e.clientX - cx;
+      let dy = e.clientY - cy;
+      const max = rect.width * 0.35;
+      const len = Math.hypot(dx, dy) || 1;
+      const cl = Math.min(len, max);
+      dx = (dx / len) * cl;
+      dy = (dy / len) * cl;
+      knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      input.aimDX = dx / max || input.aimDX;
+      input.aimDY = dy / max || input.aimDY;
+      input.aiming = true;
+      NinjaRope.setAimFromDir(rope, input.aimDX, input.aimDY);
+    }
+    pad.addEventListener('pointerdown', (e) => {
+      pad.setPointerCapture(e.pointerId);
+      aimFromEvent(e);
+    });
+    pad.addEventListener('pointermove', (e) => {
+      if (e.buttons || e.pressure > 0) aimFromEvent(e);
+    });
+    pad.addEventListener('pointerup', () => {
+      input.aiming = false;
+      knob.style.transform = 'translate(-50%, -50%)';
+    });
+
+    window.addEventListener('keydown', (e) => {
+      keys[e.key.toLowerCase()] = true;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        input.fire = true;
+      }
+      if (e.key === 'Shift') {
+        e.preventDefault();
+        input.detach = true;
+      }
+      if (e.key === 'Escape') togglePause();
+    });
+    window.addEventListener('keyup', (e) => {
+      keys[e.key.toLowerCase()] = false;
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (input.aiming) return;
+      const rect = canvas.getBoundingClientRect();
+      const mx = ((e.clientX - rect.left) / rect.width) * W;
+      const my = ((e.clientY - rect.top) / rect.height) * H;
+      const sx = NinjaWorld.worldToScreen(world, player.x);
+      NinjaRope.setAimFromDir(rope, mx - sx, my - player.y);
+      input.aimDX = rope.aimX;
+      input.aimDY = rope.aimY;
+    });
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.button === 2) {
+        input.detach = true;
+        return;
+      }
+      if (e.pointerType === 'mouse' && e.button === 0 && !e.target.closest('#controls')) {
+        // left click fires on desktop when not hitting UI
+      }
+    });
+  }
+
+  function wireUi() {
+    document.getElementById('playBtn').addEventListener('click', startGame);
+    document.getElementById('retryBtn').addEventListener('click', startGame);
+    document.getElementById('pauseBtn').addEventListener('click', togglePause);
+    document.getElementById('resumeBtn').addEventListener('click', resumeFromPause);
+    document.getElementById('quitBtn').addEventListener('click', () => {
+      show(document.getElementById('pauseOverlay'), false);
+      goMenu();
+    });
+    document.getElementById('langToggle').addEventListener('click', () => NinjaI18n.toggleLanguage());
+    document.getElementById('openSkinsBtn').addEventListener('click', () => {
+      if (state !== STATE.MENU && state !== STATE.OVER && state !== STATE.PAUSED) {
+        stateBeforePause = state;
+        state = STATE.PAUSED;
+      }
+      show(document.getElementById('skinsOverlay'), true);
+      renderSkinGrid();
+    });
+    document.getElementById('closeSkinsBtn').addEventListener('click', () => {
+      show(document.getElementById('skinsOverlay'), false);
+      if (state === STATE.PAUSED && stateBeforePause) {
+        state = stateBeforePause;
+        lastTime = 0;
+      }
+    });
+    document.getElementById('menuSkinsBtn').addEventListener('click', () => {
+      show(document.getElementById('skinsOverlay'), true);
+      renderSkinGrid();
+    });
+    document.getElementById('helpBtn').addEventListener('click', () => {
+      if (state !== STATE.MENU && state !== STATE.OVER && state !== STATE.PAUSED) {
+        stateBeforePause = state;
+        state = STATE.PAUSED;
+      }
+      show(document.getElementById('helpOverlay'), true);
+    });
+    document.getElementById('menuHelpBtn').addEventListener('click', () => {
+      show(document.getElementById('helpOverlay'), true);
+    });
+    document.getElementById('closeHelpBtn').addEventListener('click', () => {
+      show(document.getElementById('helpOverlay'), false);
+      if (state === STATE.PAUSED && stateBeforePause) {
+        state = stateBeforePause;
+        lastTime = 0;
+      }
+    });
+
+    window.addEventListener('ninjagrip:langchange', () => {
+      refreshHudLabels();
+      NinjaI18n.applyDomTranslations();
+      if (!document.getElementById('skinsOverlay').classList.contains('hidden')) renderSkinGrid();
+      document.getElementById('bestScoreRow').innerHTML = NinjaI18n.t('gameOver.best', {
+        value: NinjaSkins.bestDistance,
+      });
+    });
+  }
+
+  // Expose for mini-games
+  window.NinjaGrip = {
+    get state() {
+      return state;
+    },
+    setPaused(on) {
+      if (on) {
+        if (state !== STATE.PAUSED && state !== STATE.MENU && state !== STATE.OVER) {
+          stateBeforePause = state;
+          state = STATE.PAUSED;
+        }
+      } else if (state === STATE.PAUSED) {
+        resumeFromPause();
+      }
+    },
+    addCoins(n) {
+      NinjaSkins.addCoins(n);
+      updateHud();
+    },
+    refreshHud: updateHud,
+    STATE,
+  };
+
+  async function boot() {
+    resize();
+    window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', () => {
+      setTimeout(resize, 100);
+      setTimeout(resize, 300);
+    });
+    await NinjaI18n.initI18n();
+    refreshHudLabels();
+    setupControls();
+    wireUi();
+    NinjaWorld.resetWorld(world, H);
+    goMenu();
+    draw();
+    rafId = requestAnimationFrame(loop);
+  }
+
+  boot();
+})();

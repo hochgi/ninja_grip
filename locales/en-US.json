@@ -1,0 +1,108 @@
+{
+  "meta": {
+    "title": "Ninja Grip"
+  },
+  "hud": {
+    "distance": "Dist: {{value}}m",
+    "best": "Best: {{value}}"
+  },
+  "menu": {
+    "subtitle": "Endless rope ninja",
+    "title": "Ninja Grip",
+    "hint": "Aim and shoot your rope at hanging targets. Stand on platforms or hang from handles to aim carefully. Don't fall behind!",
+    "play": "Play ▶",
+    "skins": "Skins",
+    "help": "How to play"
+  },
+  "pause": {
+    "subtitle": "Paused",
+    "title": "Break",
+    "resume": "Resume ▶",
+    "quit": "Quit to menu"
+  },
+  "gameOver": {
+    "quote": "The ninja fell",
+    "best": "Your best: <b>{{value}}</b> meters",
+    "retry": "Back to the dojo 🥋"
+  },
+  "help": {
+    "subtitle": "Ninja guide",
+    "title": "How to play?",
+    "aimTitle": "Aim",
+    "aimBody": "Use the aim stick (or mouse) to point at a hanging target.",
+    "fireTitle": "Fire rope",
+    "fireBody": "Shoot a straight rope projectile. It only attaches to targets.",
+    "swingTitle": "Swing & length",
+    "swingBody": "While attached, swing with move keys and shorten/lengthen the rope.",
+    "restTitle": "Platforms & handles",
+    "restBody": "Stand on platforms or hang from handles to aim safely. Targets break if you hang too long.",
+    "scrollTitle": "Don't fall behind",
+    "scrollBody": "The world drifts right. Red edges warn you — leave the frame and it's game over.",
+    "close": "Got it! 🥋"
+  },
+  "skins": {
+    "subtitle": "Choose your ninja",
+    "title": "Skins",
+    "progress": "{{owned}} / {{total}} owned  •  🪙 {{coins}} coins",
+    "selected": "✓ Selected",
+    "select": "Tap to select",
+    "back": "Back"
+  },
+  "skinsNames": {
+    "classic": "Classic Ninja",
+    "crimson": "Crimson Blade",
+    "jade": "Jade Green",
+    "azure": "Night Azure",
+    "gold": "Golden Master",
+    "violet": "Violet Shadow",
+    "storm": "Iron Storm",
+    "sakura": "Sakura Bloom",
+    "venom": "Venom Ninja",
+    "obsidian": "Obsidian",
+    "phoenix": "Phoenix",
+    "glacier": "Glacier",
+    "shadow": "Shadow Master",
+    "ember": "Burning Ember",
+    "royal": "Royal Ninja",
+    "toxic": "Toxic Dragon",
+    "midnight": "Midnight",
+    "solar": "Solar Ninja",
+    "abyss": "Abyss",
+    "legend": "Dojo Legend"
+  },
+  "lang": {
+    "toggle": "EN / עב",
+    "he": "עברית",
+    "en": "English"
+  },
+  "controls": {
+    "fire": "Fire",
+    "shorten": "↑ Rope",
+    "lengthen": "↓ Rope",
+    "detach": "Jump",
+    "move": "Move"
+  },
+  "side": {
+    "battle": "Battle",
+    "hideSeek": "Hide"
+  },
+  "battle": {
+    "stage": "Battle stage {{n}}",
+    "enemy": "Enemy",
+    "winSub": "Victory!",
+    "loseSub": "Defeat",
+    "winMsg": "You earned 🪙 {{reward}} coins!",
+    "loseMsg": "Try again — earn coins in the main run.",
+    "back": "Back to game",
+    "next": "Next stage"
+  },
+  "hideSeek": {
+    "subtitle": "Find them all before time runs out",
+    "title": "Ninja Hide & Seek",
+    "instructions": "You are the <b>seeker</b> — find 9 hiding ninjas.<br><b>D-pad</b> to move • <b>🔫</b> to shoot<br>Hit a ninja = found!<br>You have <b>60 seconds</b> and <b>12 bullets</b>.",
+    "start": "Start searching! 🔍",
+    "result": "Result",
+    "found": "Ninjas found",
+    "again": "Play again"
+  }
+}

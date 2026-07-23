@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>גריפ נינג'ה</title>
+  <link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+<div id="game-container">
+  <canvas id="gameCanvas"></canvas>
+
+  <div class="hud">
+    <div class="hud-chip" id="distanceChip">מרחק: <span id="distanceVal">0</span>מ'</div>
+    <div class="hud-chip">🪙 <span id="coinVal">0</span></div>
+    <div class="hud-chip" id="bestChip">שיא: <span id="bestVal">0</span></div>
+  </div>
+
+  <button id="langToggle" type="button" data-i18n="lang.toggle">EN / עב</button>
+  <button id="pauseBtn" type="button">⏸</button>
+
+  <button id="openSkinsBtn" class="side-btn" style="bottom:100px;left:12px;" type="button">🎽</button>
+  <button id="helpBtn" class="side-btn help" style="bottom:174px;left:12px;" type="button">❓</button>
+  <button id="hideSeekBtn" class="side-btn hide-seek" style="bottom:248px;left:12px;" type="button">
+    🔍<span class="side-label" id="hideSeekBtnLabel" data-i18n="side.hideSeek">מחבואים</span>
+  </button>
+  <button id="battleBtn" class="side-btn battle" style="bottom:100px;right:12px;" type="button">
+    ⚔️<span class="side-label" id="battleBtnLabel" data-i18n="side.battle">קרב</span>
+  </button>
+
+  <div id="controls">
+    <div class="ctrl-cluster left">
+      <button class="ctrl-btn" id="btnLeft" type="button">◀</button>
+      <button class="ctrl-btn" id="btnRight" type="button">▶</button>
+      <div id="aimPad"><div id="aimKnob"></div></div>
+    </div>
+    <div class="ctrl-cluster right">
+      <button class="ctrl-btn" id="btnShorten" type="button"><span id="ctrlShorten">↑</span></button>
+      <button class="ctrl-btn" id="btnLengthen" type="button"><span id="ctrlLengthen">↓</span></button>
+      <button class="ctrl-btn fire" id="btnFire" type="button"><span id="ctrlFire">Fire</span></button>
+      <button class="ctrl-btn detach" id="btnDetach" type="button"><span id="ctrlDetach">Jump</span></button>
+    </div>
+  </div>
+
+  <div class="overlay" id="menuOverlay">
+    <div class="title-sub" data-i18n="menu.subtitle">Endless rope ninja</div>
+    <div class="title-main" data-i18n="menu.title">Ninja Grip</div>
+    <p class="instructions" data-i18n="menu.hint">Aim and shoot your rope at hanging targets.</p>
+    <button class="btn" id="playBtn" type="button" data-i18n="menu.play">Play ▶</button>
+    <button class="btn-secondary" id="menuSkinsBtn" type="button" data-i18n="menu.skins">Skins</button>
+    <button class="btn-secondary" id="menuHelpBtn" type="button" data-i18n="menu.help">How to play</button>
+  </div>
+
+  <div class="overlay hidden" id="helpOverlay">
+    <div class="title-sub" data-i18n="help.subtitle">Ninja guide</div>
+    <div class="title-main" style="font-size:34px;margin-bottom:4px;" data-i18n="help.title">How to play?</div>
+    <div class="help-cards">
+      <div class="help-card"><h3 data-i18n="help.aimTitle">Aim</h3><p data-i18n="help.aimBody"></p></div>
+      <div class="help-card"><h3 data-i18n="help.fireTitle">Fire</h3><p data-i18n="help.fireBody"></p></div>
+      <div class="help-card"><h3 data-i18n="help.swingTitle">Swing</h3><p data-i18n="help.swingBody"></p></div>
+      <div class="help-card"><h3 data-i18n="help.restTitle">Rest</h3><p data-i18n="help.restBody"></p></div>
+      <div class="help-card"><h3 data-i18n="help.scrollTitle">Scroll</h3><p data-i18n="help.scrollBody"></p></div>
+    </div>
+    <button class="btn" id="closeHelpBtn" type="button" data-i18n="help.close">Got it!</button>
+  </div>
+
+  <div class="overlay hidden" id="pauseOverlay">
+    <div class="title-sub" data-i18n="pause.subtitle">Paused</div>
+    <div class="title-main" style="font-size:38px;margin-bottom:20px;" data-i18n="pause.title">Break</div>
+    <button class="btn" id="resumeBtn" type="button" data-i18n="pause.resume">Resume ▶</button>
+    <button class="btn-secondary" id="quitBtn" type="button" data-i18n="pause.quit">Quit to menu</button>
+  </div>
+
+  <div class="overlay hidden" id="skinsOverlay">
+    <div class="title-sub" data-i18n="skins.subtitle">Choose your ninja</div>
+    <div class="title-main" style="font-size:32px;" data-i18n="skins.title">Skins</div>
+    <div class="skins-progress" id="skinsProgress">0 / 20</div>
+    <div class="skins-grid" id="skinsGrid"></div>
+    <button class="btn" id="closeSkinsBtn" type="button" data-i18n="skins.back">Back</button>
+  </div>
+
+  <div class="overlay hidden" id="gameOverOverlay">
+    <div class="score-result-label" id="fallQuote" data-i18n="gameOver.quote">The ninja fell</div>
+    <div class="score-result" id="finalScore">0</div>
+    <div class="best-row" id="bestScoreRow"></div>
+    <button class="btn" id="retryBtn" type="button" data-i18n="gameOver.retry">Retry</button>
+  </div>
+
+  <!-- Battle overlay -->
+  <div class="overlay hidden" id="battleOverlay">
+    <canvas id="battleCanvas"></canvas>
+    <div style="position:absolute;top:14px;left:0;right:0;display:flex;justify-content:space-between;padding:0 16px;z-index:5;">
+      <div class="hud-chip" id="battleStageLabel">Battle 1</div>
+      <div class="hud-chip" id="battlePlayerHpDisplay">❤️ 3</div>
+    </div>
+    <div style="position:absolute;top:60px;left:50%;transform:translateX(-50%);z-index:5;width:180px;">
+      <div style="font-size:11px;color:#c44b3a;text-align:center;margin-bottom:4px;font-weight:800;" id="enemyNameDisplay">Enemy</div>
+      <div style="background:#3a1010;border-radius:8px;height:12px;border:1px solid #8a2020;overflow:hidden;">
+        <div id="enemyHpBar" style="height:100%;width:100%;background:linear-gradient(90deg,#c4302a,#ff6a3a);border-radius:8px;"></div>
+      </div>
+    </div>
+    <div style="position:absolute;bottom:24px;left:16px;display:flex;gap:10px;z-index:10;pointer-events:all;">
+      <button id="battleLeft" style="width:60px;height:60px;border-radius:50%;border:3px solid #5a4a35;background:rgba(20,15,10,0.85);color:#f0d9a8;font-size:26px;cursor:pointer;touch-action:none;">◀</button>
+      <button id="battleRight" style="width:60px;height:60px;border-radius:50%;border:3px solid #5a4a35;background:rgba(20,15,10,0.85);color:#f0d9a8;font-size:26px;cursor:pointer;touch-action:none;">▶</button>
+    </div>
+    <div style="position:absolute;bottom:24px;right:16px;display:flex;gap:10px;z-index:10;pointer-events:all;">
+      <button id="battleJump" style="width:60px;height:60px;border-radius:50%;border:3px solid #d8a23a;background:rgba(20,15,10,0.85);color:#f0d9a8;font-size:22px;cursor:pointer;touch-action:none;">↑</button>
+      <button id="battleAttack" style="width:60px;height:60px;border-radius:50%;border:3px solid #c44b3a;background:rgba(30,10,10,0.85);color:#f0d9a8;font-size:22px;cursor:pointer;touch-action:none;">⚔️</button>
+    </div>
+  </div>
+
+  <div id="battleResultOverlay">
+    <div class="title-sub" id="battleResultSub">Victory!</div>
+    <div class="title-main" id="battleResultTitle" style="font-size:44px;">🏆</div>
+    <div id="battleResultMsg" style="color:#c9b89a;font-size:16px;margin:10px 0 20px;"></div>
+    <button class="btn" id="battleResultBtn" type="button">Back</button>
+  </div>
+
+  <div id="hideSeekScreen">
+    <button id="hs_closeBtn" type="button" style="position:absolute;top:14px;right:14px;z-index:201;width:44px;height:44px;border-radius:12px;border:2px solid #3a9d6e;background:rgba(10,20,14,0.9);color:#f0d9a8;font-size:20px;cursor:pointer;font-weight:900;">✕</button>
+    <canvas id="hs_gameCanvas"></canvas>
+    <div id="hs_hud">
+      <div class="hud-chip">🔍 <span id="hs_foundCount">0</span>/9</div>
+      <div class="hud-chip" id="hs_timerChip">⏱ 60</div>
+      <div class="hud-chip" id="hs_ammoChip">🔫 <span id="hs_ammoCount">12</span></div>
+    </div>
+    <div id="hs_dpad">
+      <div></div>
+      <button class="hs-dpad-btn" id="hs_btnUp" type="button">▲</button>
+      <div></div>
+      <button class="hs-dpad-btn" id="hs_btnLeft" type="button">◀</button>
+      <button class="hs-dpad-btn" id="hs_btnDown" type="button">▼</button>
+      <button class="hs-dpad-btn" id="hs_btnRight" type="button">▶</button>
+    </div>
+    <button id="hs_btnShoot" type="button" style="position:absolute;bottom:24px;right:16px;z-index:10;width:90px;height:90px;border-radius:50%;border:4px solid #c44b3a;background:rgba(30,10,10,0.9);color:#f0d9a8;font-size:32px;cursor:pointer;touch-action:none;">🔫</button>
+    <div id="hs_overlay">
+      <div class="title-sub" data-i18n="hideSeek.subtitle">Find them</div>
+      <div class="title-main" data-i18n="hideSeek.title">Hide & Seek</div>
+      <div class="instructions" data-i18n="hideSeek.instructions" data-i18n-html>Instructions</div>
+      <button class="btn" id="hs_btnStart" type="button" data-i18n="hideSeek.start">Start</button>
+    </div>
+    <div id="hs_resultOverlay">
+      <div class="title-sub" id="hs_resultSub" data-i18n="hideSeek.result">Result</div>
+      <div class="result-big" id="hs_resultScore">0/9</div>
+      <div class="result-sub" id="hs_resultMsg" data-i18n="hideSeek.found">Found</div>
+      <button class="btn" id="hs_btnRestart" type="button" data-i18n="hideSeek.again">Again</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/vendor/i18next.min.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/skins.js"></script>
+<script src="js/world.js"></script>
+<script src="js/rope.js"></script>
+<script src="js/main.js"></script>
+<script src="js/battle.js"></script>
+<script src="js/hide-seek.js"></script>
+</body>
+</html>
