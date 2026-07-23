@@ -246,7 +246,7 @@
       tryDetach();
     }
 
-    NinjaWorld.updateCamera(world, dt, H);
+    NinjaWorld.updateCamera(world, dt, H, player.x, W);
 
     if (state === STATE.ROPE_FLY) {
       const hit = NinjaRope.updateProjectile(rope, world, dt);
@@ -290,7 +290,8 @@
     collectCoins();
 
     const sx = NinjaWorld.worldToScreen(world, player.x);
-    if (sx < -player.w || player.y - player.feet > H + 10) {
+    const offLeft = world.scrollUnlocked && sx < -player.w;
+    if (offLeft || player.y - player.feet > H + 10) {
       gameOver();
     }
   }
@@ -347,7 +348,7 @@
     }
     NinjaSkins.drawPlayer(ctx, sx, player.y, skin, { pose, angle, time: elapsed });
 
-    const danger = NinjaWorld.dangerFactor(sx, player.y, W, H);
+    const danger = NinjaWorld.dangerFactor(sx, player.y, W, H, world.scrollUnlocked);
     NinjaWorld.drawDangerVignette(ctx, W, H, danger);
 
     // Distance HUD number refresh without full re-i18n every frame

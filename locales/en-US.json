@@ -37,7 +37,7 @@
     "restTitle": "Platforms & handles",
     "restBody": "Stand on platforms or hang from handles to aim safely. Targets break if you hang too long.",
     "scrollTitle": "Don't fall behind",
-    "scrollBody": "The world drifts right. Red edges warn you — leave the frame and it's game over.",
+    "scrollBody": "The camera stays still until you pass mid-screen. After that it drifts right — red edges warn you; leave the frame and it's game over.",
     "close": "Got it! 🥋"
   },
   "skins": {

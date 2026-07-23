@@ -5,8 +5,14 @@
     strong: { radius: 28, hangTime: 7.0, color: '#6fd86f', weight: 0.25 },
   };
 
-  const BASE_SCROLL = 70;
-  const SCROLL_RAMP = 0.012; // per meter of distance
+  // Forced drift once scrolling is unlocked (gentle; ramps with distance).
+  const BASE_SCROLL = 42;
+  const SCROLL_RAMP = 0.008; // per meter of distance
+  // Unlock when the player first crosses this fraction of the viewport (center).
+  const SCROLL_UNLOCK_FRAC = 0.5;
+  // After unlock, camera tries to keep the player around this screen-x fraction.
+  // Slightly left of center so there is room ahead to aim at targets.
+  const CAMERA_ANCHOR_FRAC = 0.4;
 
   function pickTier(rand) {
     const r = rand();
@@ -19,6 +25,7 @@
     return {
       cameraX: 0,
       distance: 0,
+      scrollUnlocked: false,
       platforms: [],
       handles: [],
       targets: [],
@@ -41,6 +48,7 @@
   function resetWorld(world, H) {
     world.cameraX = 0;
     world.distance = 0;
+    world.scrollUnlocked = false;
     world.platforms = [];
     world.handles = [];
     world.targets = [];
@@ -130,10 +138,27 @@
     return BASE_SCROLL + world.distance * SCROLL_RAMP;
   }
 
-  function updateCamera(world, dt, H) {
+  /**
+   * Camera stays still until the player crosses mid-screen (practice window).
+   * After unlock: cameraX = max(cameraX + forcedScroll*dt, player.x - anchor),
+   * so rushing ahead pulls the view forward, while lagging still faces slow pressure.
+   */
+  function updateCamera(world, dt, H, playerX, W) {
     world.elapsed += dt;
-    const spd = scrollSpeed(world);
-    world.cameraX += spd * dt;
+    const screenX = playerX - world.cameraX;
+
+    if (!world.scrollUnlocked) {
+      if (screenX >= W * SCROLL_UNLOCK_FRAC) {
+        world.scrollUnlocked = true;
+      } else {
+        ensureChunks(world, H, 1000);
+        return;
+      }
+    }
+
+    const forced = world.cameraX + scrollSpeed(world) * dt;
+    const follow = playerX - W * CAMERA_ANCHOR_FRAC;
+    world.cameraX = Math.max(forced, follow);
     world.distance = Math.max(world.distance, world.cameraX / 10);
     ensureChunks(world, H, 1000);
   }
@@ -142,11 +167,13 @@
     return x - world.cameraX;
   }
 
-  function dangerFactor(screenX, screenY, W, H) {
-    // 1 at kill edge, 0 when safe. Kill edges: left & bottom.
+  function dangerFactor(screenX, screenY, W, H, scrollUnlocked) {
+    // 1 at kill edge, 0 when safe. Bottom always; left only after scroll unlock.
     let f = 0;
-    const leftZone = W * 0.1;
-    if (screenX < leftZone) f = Math.max(f, 1 - screenX / leftZone);
+    if (scrollUnlocked) {
+      const leftZone = W * 0.1;
+      if (screenX < leftZone) f = Math.max(f, 1 - screenX / leftZone);
+    }
     const bottomZone = H * 0.1;
     const fromBottom = H - screenY;
     if (fromBottom < bottomZone) f = Math.max(f, 1 - fromBottom / bottomZone);
