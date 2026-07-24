@@ -20,7 +20,7 @@
   const rope = NinjaRope.createRopeState();
   let state = STATE.MENU;
   let stateBeforePause = null;
-  let player = { x: 120, y: 200, vx: 0, vy: 0, move: 0, w: 12, feet: 24 };
+  let player = { x: 120, y: 200, vx: 0, vy: 0, move: 0, w: 12, feet: 24, fallGrace: 0 };
   let lastTime = 0;
   let rafId = 0;
   let elapsed = 0;
@@ -102,6 +102,7 @@
     player.vx = 0;
     player.vy = 0;
     player.move = 0;
+    player.fallGrace = 0;
     attachedHandle = null;
     runCoins = 0;
     elapsed = 0;
@@ -167,10 +168,10 @@
     lastTime = 0;
   }
 
-  function collectCoins() {
+  function collectCoins(dt) {
     for (const c of world.coins) {
       if (c.collected) {
-        if (c.popLife > 0) c.popLife -= 0.05;
+        if (c.popLife > 0) c.popLife -= dt * 3;
         continue;
       }
       const dx = player.x - c.x;
@@ -236,6 +237,7 @@
 
     syncAim();
     if (rope.cooldown > 0) rope.cooldown -= dt;
+    NinjaRope.tickFallGrace(player, dt);
 
     if (input.fire) {
       input.fire = false;
@@ -248,10 +250,12 @@
 
     NinjaWorld.updateCamera(world, dt, H, player.x, W);
 
+    const gScale = NinjaRope.fallGravityScale(player);
+
     if (state === STATE.ROPE_FLY) {
       const hit = NinjaRope.updateProjectile(rope, world, dt);
       // Still apply light gravity while shot is in air
-      player.vy += NinjaRope.GRAVITY * dt;
+      player.vy += NinjaRope.GRAVITY * gScale * dt;
       player.x += player.vx * dt;
       player.y += player.vy * dt;
       resolvePlatformLanding();
@@ -272,7 +276,7 @@
     } else {
       // GROUND or AIR
       if (state !== STATE.GROUND) {
-        player.vy += NinjaRope.GRAVITY * dt;
+        player.vy += NinjaRope.GRAVITY * gScale * dt;
       } else {
         player.vy = 0;
         player.vx = player.move * 160;
@@ -287,7 +291,7 @@
       tryGrabHandle();
     }
 
-    collectCoins();
+    collectCoins(dt);
 
     const sx = NinjaWorld.worldToScreen(world, player.x);
     const offLeft = world.scrollUnlocked && sx < -player.w;
@@ -515,15 +519,23 @@
 
     window.addEventListener('keydown', (e) => {
       keys[e.key.toLowerCase()] = true;
+      const hsOpen = document.getElementById('hideSeekScreen').style.display === 'block';
+      const battleOpen = !document.getElementById('battleOverlay').classList.contains('hidden');
+      const playable =
+        state !== STATE.PAUSED &&
+        state !== STATE.MENU &&
+        state !== STATE.OVER &&
+        !hsOpen &&
+        !battleOpen;
       if (e.code === 'Space') {
         e.preventDefault();
-        input.fire = true;
+        if (playable) input.fire = true;
       }
       if (e.key === 'Shift') {
         e.preventDefault();
-        input.detach = true;
+        if (playable) input.detach = true;
       }
-      if (e.key === 'Escape') togglePause();
+      if (e.key === 'Escape' && !hsOpen && !battleOpen) togglePause();
     });
     window.addEventListener('keyup', (e) => {
       keys[e.key.toLowerCase()] = false;

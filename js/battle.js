@@ -1,26 +1,18 @@
 (function () {
   const BATTLE_ENEMIES = [
-    { nameKey: 'battle.enemy', name: 'Dojo Guard', hp: 4, speed: 130, atkInterval: 2.2, reward: 25, color: '#c44b3a' },
-    { nameKey: 'battle.enemy', name: 'Shadow Warrior', hp: 6, speed: 160, atkInterval: 1.8, reward: 50, color: '#8a4fc4' },
-    { nameKey: 'battle.enemy', name: 'Battle Master', hp: 9, speed: 190, atkInterval: 1.4, reward: 80, color: '#3a7dc4' },
-    { nameKey: 'battle.enemy', name: 'Shadow Lord', hp: 14, speed: 220, atkInterval: 1.0, reward: 150, color: '#c4302a' },
-    { nameKey: 'battle.enemy', name: 'Black Dragon', hp: 20, speed: 260, atkInterval: 0.7, reward: 250, color: '#ffd454' },
+    { nameKey: 'battle.enemies.guard', hp: 4, speed: 130, atkInterval: 2.2, reward: 25, color: '#c44b3a' },
+    { nameKey: 'battle.enemies.warrior', hp: 6, speed: 160, atkInterval: 1.8, reward: 50, color: '#8a4fc4' },
+    { nameKey: 'battle.enemies.master', hp: 9, speed: 190, atkInterval: 1.4, reward: 80, color: '#3a7dc4' },
+    { nameKey: 'battle.enemies.lord', hp: 14, speed: 220, atkInterval: 1.0, reward: 150, color: '#c4302a' },
+    { nameKey: 'battle.enemies.dragon', hp: 20, speed: 260, atkInterval: 0.7, reward: 250, color: '#ffd454' },
   ];
-
-  // Localized names via he/en simple map
-  const NAMES = {
-    'he-IL': ['שומר הדוג\'ו', 'לוחם הצללים', 'מאסטר הקרב', 'שר הצל', 'הדרקון השחור'],
-    'en-US': ['Dojo Guard', 'Shadow Warrior', 'Battle Master', 'Shadow Lord', 'Black Dragon'],
-  };
 
   let battleStageNum = 0;
   let battleRaf = null;
-  let boundOnce = false;
 
   function enemyName(idx) {
-    const lng = (window.NinjaI18n && NinjaI18n.language) || 'he-IL';
-    const list = NAMES[lng] || NAMES['en-US'];
-    return list[Math.min(idx, list.length - 1)];
+    const def = BATTLE_ENEMIES[Math.min(idx, BATTLE_ENEMIES.length - 1)];
+    return NinjaI18n.t(def.nameKey);
   }
 
   function startBattle() {

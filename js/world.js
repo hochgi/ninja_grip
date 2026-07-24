@@ -1,8 +1,8 @@
 (function (global) {
   const TARGET_TIERS = {
-    weak: { radius: 14, hangTime: 2.0, color: '#c44b3a', weight: 0.35 },
-    medium: { radius: 20, hangTime: 4.2, color: '#d8a23a', weight: 0.4 },
-    strong: { radius: 28, hangTime: 7.0, color: '#6fd86f', weight: 0.25 },
+    weak: { radius: 14, hangTime: 4.0, color: '#c44b3a', weight: 0.35 },
+    medium: { radius: 20, hangTime: 8.4, color: '#d8a23a', weight: 0.4 },
+    strong: { radius: 28, hangTime: 14.0, color: '#6fd86f', weight: 0.25 },
   };
 
   // Forced drift once scrolling is unlocked (gentle; ramps with distance).

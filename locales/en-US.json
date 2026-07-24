@@ -89,6 +89,13 @@
   "battle": {
     "stage": "Battle stage {{n}}",
     "enemy": "Enemy",
+    "enemies": {
+      "guard": "Dojo Guard",
+      "warrior": "Shadow Warrior",
+      "master": "Battle Master",
+      "lord": "Shadow Lord",
+      "dragon": "Black Dragon"
+    },
     "winSub": "Victory!",
     "loseSub": "Defeat",
     "winMsg": "You earned 🪙 {{reward}} coins!",
@@ -103,6 +110,10 @@
     "start": "Start searching! 🔍",
     "result": "Result",
     "found": "Ninjas found",
+    "winSub": "🏆 You found them all!",
+    "loseSub": "⏱ Time's up",
+    "winMsg": "All ninjas found!",
+    "loseMsg": "Ninjas found",
     "again": "Play again"
   }
 }

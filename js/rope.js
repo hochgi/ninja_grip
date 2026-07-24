@@ -3,9 +3,13 @@
   const ROPE_MIN_LEN = 40;
   const ROPE_MAX_LEN = 260;
   const ROPE_PROJ_SPEED = 520;
-  const ROPE_FIRE_COOLDOWN = 0.35;
+  const ROPE_FIRE_COOLDOWN = 0.28;
   const GRAVITY = 1400;
-  const SWING_INPUT = 2.2;
+  // Stronger player torque so swing builds momentum quickly
+  const SWING_INPUT = 5.2;
+  // After a target snaps, gravity eases in so the player can re-shoot
+  const SNAP_FALL_GRACE = 0.5;
+  const SNAP_FALL_MIN_G = 0.1;
 
   function createRopeState() {
     return {
@@ -17,6 +21,19 @@
       cooldown: 0,
       lengthInput: 0, // -1 shorten, +1 lengthen
     };
+  }
+
+  // Angle is from downward vertical: pos = target + (sinθ·L, cosθ·L)
+  // Tangent (d pos / dθ): (cosθ·L, -sinθ·L)
+  function tangentialVelocity(angle, omega, length) {
+    return {
+      vx: Math.cos(angle) * omega * length,
+      vy: -Math.sin(angle) * omega * length,
+    };
+  }
+
+  function omegaFromVelocity(angle, length, vx, vy) {
+    return (vx * Math.cos(angle) - vy * Math.sin(angle)) / Math.max(length, 1);
   }
 
   function setAimFromDir(rope, dx, dy) {
@@ -41,12 +58,10 @@
 
   function detach(rope, player) {
     if (!rope.attached) return false;
-    // Convert tangential velocity to free velocity
     const a = rope.attached;
-    const tangVx = -Math.sin(a.angle) * a.omega * a.length;
-    const tangVy = Math.cos(a.angle) * a.omega * a.length;
-    player.vx = tangVx;
-    player.vy = tangVy;
+    const v = tangentialVelocity(a.angle, a.omega, a.length);
+    player.vx = v.vx;
+    player.vy = v.vy;
     rope.attached = null;
     return true;
   }
@@ -57,14 +72,12 @@
     let length = Math.hypot(dx, dy);
     length = Math.max(ROPE_MIN_LEN, Math.min(ROPE_MAX_LEN, length));
     const angle = Math.atan2(dx, dy); // 0 = hanging straight down
-    // Approximate omega from current velocity
-    const tx = -Math.sin(angle);
-    const ty = Math.cos(angle);
-    const omega = (player.vx * tx + player.vy * ty) / Math.max(length, 1);
+    const omega = omegaFromVelocity(angle, length, player.vx, player.vy);
     rope.attached = { target, length, angle, omega };
     rope.projectile = null;
     player.vx = 0;
     player.vy = 0;
+    player.fallGrace = 0;
   }
 
   function updateProjectile(rope, world, dt) {
@@ -83,6 +96,16 @@
     return null;
   }
 
+  function beginSnapFall(rope, player, angle, omega, length) {
+    const v = tangentialVelocity(angle, omega, length);
+    player.vx = v.vx;
+    // Soften initial downward plunge so a re-shot is possible
+    player.vy = Math.min(v.vy, 60);
+    player.fallGrace = SNAP_FALL_GRACE;
+    rope.attached = null;
+    rope.cooldown = 0;
+  }
+
   function updateAttached(rope, player, dt) {
     const a = rope.attached;
     if (!a || !a.target || a.target.broken) {
@@ -90,34 +113,45 @@
       return;
     }
 
-    // Length change
+    // Length change — shortening spins you up (angular-momentum feel)
     if (rope.lengthInput !== 0) {
-      a.length += rope.lengthInput * 120 * dt;
+      const oldLen = a.length;
+      a.length += rope.lengthInput * 140 * dt;
       a.length = Math.max(ROPE_MIN_LEN, Math.min(ROPE_MAX_LEN, a.length));
+      if (a.length < oldLen && a.length > 0) {
+        a.omega *= oldLen / a.length;
+      }
     }
 
-    // Pendulum: angle measured from downward vertical
-    // alpha = - (g/L) sin(theta) + input
+    // Pendulum: alpha = -(g/L) sin(theta) + input torque
     const input = player.move * SWING_INPUT;
     const alpha = -(GRAVITY / a.length) * Math.sin(a.angle) + input;
     a.omega += alpha * dt;
-    a.omega *= Math.pow(0.985, dt * 60); // light damping
+    a.omega *= Math.pow(0.995, dt * 60); // light damping
     a.angle += a.omega * dt;
 
     player.x = a.target.x + Math.sin(a.angle) * a.length;
     player.y = a.target.y + Math.cos(a.angle) * a.length;
 
-    // Drain target durability while attached
     a.target.durability -= dt;
     if (a.target.durability <= 0) {
       a.target.durability = 0;
       a.target.broken = true;
-      // Drop with current tangential velocity
-      const tangVx = -Math.sin(a.angle) * a.omega * a.length;
-      const tangVy = Math.cos(a.angle) * a.omega * a.length;
-      player.vx = tangVx;
-      player.vy = tangVy;
-      rope.attached = null;
+      beginSnapFall(rope, player, a.angle, a.omega, a.length);
+    }
+  }
+
+  /** Gravity multiplier while fallGrace is active (ease-in from SNAP_FALL_MIN_G → 1). */
+  function fallGravityScale(player) {
+    if (!player.fallGrace || player.fallGrace <= 0) return 1;
+    const t = 1 - player.fallGrace / SNAP_FALL_GRACE; // 0 at snap → 1 when done
+    const eased = t * t;
+    return SNAP_FALL_MIN_G + (1 - SNAP_FALL_MIN_G) * eased;
+  }
+
+  function tickFallGrace(player, dt) {
+    if (player.fallGrace > 0) {
+      player.fallGrace = Math.max(0, player.fallGrace - dt);
     }
   }
 
@@ -174,6 +208,7 @@
     ROPE_MIN_LEN,
     ROPE_MAX_LEN,
     GRAVITY,
+    SNAP_FALL_GRACE,
     createRopeState,
     setAimFromDir,
     fire,
@@ -181,6 +216,8 @@
     attachTo,
     updateProjectile,
     updateAttached,
+    fallGravityScale,
+    tickFallGrace,
     drawAim,
     drawRope,
   };

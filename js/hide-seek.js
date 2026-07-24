@@ -464,9 +464,10 @@
   function endGame() {
     gameState='over';
     let won = foundCount>=9;
-    document.getElementById('hs_resultSub').textContent = won ? '🏆 מצאת את כולם!' : '⏱ הזמן נגמר';
+    const t = (window.NinjaI18n && NinjaI18n.t.bind(NinjaI18n)) || ((k) => k);
+    document.getElementById('hs_resultSub').textContent = won ? t('hideSeek.winSub') : t('hideSeek.loseSub');
     document.getElementById('hs_resultScore').textContent = foundCount + '/9';
-    document.getElementById('hs_resultMsg').textContent = won ? 'כל הנינג\'ות נמצאו!' : 'נינג\'ות נמצאו';
+    document.getElementById('hs_resultMsg').textContent = won ? t('hideSeek.winMsg') : t('hideSeek.loseMsg');
     document.getElementById('hs_resultOverlay').style.display='flex';
   }
 
