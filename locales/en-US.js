@@ -10,7 +10,7 @@ window.NINJA_LOCALES['en-US'] = {
   "menu": {
     "subtitle": "Endless rope ninja",
     "title": "Ninja Grip",
-    "hint": "Aim and shoot your rope at hanging targets. Stand on platforms or hang from handles to aim carefully. Don't fall behind!",
+    "hint": "On phone: tilt to swing / change rope length. Tap left to jump, tap right to aim+fire.",
     "play": "Play ▶",
     "skins": "Skins",
     "help": "How to play"
@@ -29,17 +29,24 @@ window.NINJA_LOCALES['en-US'] = {
   "help": {
     "subtitle": "Ninja guide",
     "title": "How to play?",
-    "aimTitle": "Aim",
-    "aimBody": "Use the aim stick (or mouse) to point at a hanging target.",
-    "fireTitle": "Fire rope",
-    "fireBody": "Shoot a straight rope projectile. It only attaches to targets.",
-    "swingTitle": "Swing & length",
-    "swingBody": "While attached, swing with move keys and shorten/lengthen the rope.",
+    "aimTitle": "Aim & fire",
+    "aimBody": "Desktop: mouse aim + Space/Fire. Phone: tap the right half of the screen to aim and shoot.",
+    "fireTitle": "Jump / detach",
+    "fireBody": "Desktop: Shift/Jump. Phone: tap the left half of the screen.",
+    "swingTitle": "Swing & rope length",
+    "swingBody": "Desktop: A/D and W/S. Phone (Android): tilt sideways to swing, tilt forward/back to shorten/lengthen.",
     "restTitle": "Platforms & handles",
     "restBody": "Stand on platforms or hang from handles to aim safely. Targets break if you hang too long.",
     "scrollTitle": "Don't fall behind",
     "scrollBody": "The camera stays still until you pass mid-screen. After that it drifts right — red edges warn you; leave the frame and it's game over.",
     "close": "Got it! 🥋"
+  },
+  "mobile": {
+    "tapJump": "Tap ← Jump",
+    "tapFire": "Tap → Fire",
+    "tiltHint": "Tilt ↔ swing · tilt ↕ rope",
+    "tiltOn": "Tilt controls on",
+    "tiltOff": "Tilt unavailable — tap only"
   },
   "skins": {
     "subtitle": "Choose your ninja",

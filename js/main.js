@@ -26,6 +26,8 @@
   let elapsed = 0;
   let runCoins = 0;
   let attachedHandle = null;
+  let touchPlay = false; // mobile/touch session: tilt + side taps
+  let motionOn = false;
 
   const keys = Object.create(null);
   const input = {
@@ -57,7 +59,23 @@
   }
 
   function showControls(on) {
-    document.getElementById('controls').classList.toggle('visible', on);
+    const el = document.getElementById('controls');
+    // Touch/tilt sessions hide the old button pad
+    el.classList.toggle('visible', on && !touchPlay);
+    const hints = document.getElementById('mobileHints');
+    if (hints) hints.classList.toggle('visible', on && touchPlay);
+  }
+
+  function isPlayable() {
+    const hsOpen = document.getElementById('hideSeekScreen').style.display === 'block';
+    const battleOpen = !document.getElementById('battleOverlay').classList.contains('hidden');
+    return (
+      state !== STATE.PAUSED &&
+      state !== STATE.MENU &&
+      state !== STATE.OVER &&
+      !hsOpen &&
+      !battleOpen
+    );
   }
 
   function showSideButtons(on) {
@@ -111,6 +129,10 @@
 
   function goMenu() {
     state = STATE.MENU;
+    if (window.NinjaMotion) NinjaMotion.disable();
+    motionOn = false;
+    touchPlay = false;
+    document.body.classList.remove('touch-play');
     show(document.getElementById('menuOverlay'), true);
     show(document.getElementById('gameOverOverlay'), false);
     show(document.getElementById('pauseOverlay'), false);
@@ -127,14 +149,32 @@
     show(document.getElementById('gameOverOverlay'), false);
     show(document.getElementById('pauseOverlay'), false);
     showPauseBtn(true);
+    touchPlay = !!(window.NinjaMotion && NinjaMotion.prefersTouch());
+    document.body.classList.toggle('touch-play', touchPlay);
     showControls(true);
     showSideButtons(false);
     lastTime = 0;
+    if (touchPlay && window.NinjaMotion) {
+      NinjaMotion.enable().then((ok) => {
+        motionOn = !!ok;
+        const status = document.getElementById('motionStatus');
+        if (status) {
+          status.textContent = ok
+            ? NinjaI18n.t('mobile.tiltOn')
+            : NinjaI18n.t('mobile.tiltOff');
+        }
+        if (ok) NinjaMotion.recalibrate();
+      });
+    } else {
+      motionOn = false;
+    }
   }
 
   function gameOver() {
     if (state === STATE.OVER) return;
     state = STATE.OVER;
+    if (window.NinjaMotion) NinjaMotion.disable();
+    motionOn = false;
     NinjaSkins.updateBest(world.distance);
     if (runCoins > 0) {
       // already added on pickup
@@ -234,6 +274,15 @@
     rope.lengthInput = 0;
     if (input.shorten || keys['w'] || keys['q'] || keys['arrowup']) rope.lengthInput = -1;
     if (input.lengthen || keys['s'] || keys['e'] || keys['arrowdown']) rope.lengthInput = 1;
+
+    // Android-first tilt overrides when motion is live
+    if (motionOn && window.NinjaMotion) {
+      const m = NinjaMotion.sample();
+      if (m.fresh) {
+        if (Math.abs(m.move) > 0.35) player.move = Math.sign(m.move);
+        if (m.lengthInput) rope.lengthInput = m.lengthInput;
+      }
+    }
 
     syncAim();
     if (rope.cooldown > 0) rope.cooldown -= dt;
@@ -519,14 +568,9 @@
 
     window.addEventListener('keydown', (e) => {
       keys[e.key.toLowerCase()] = true;
+      const playable = isPlayable();
       const hsOpen = document.getElementById('hideSeekScreen').style.display === 'block';
       const battleOpen = !document.getElementById('battleOverlay').classList.contains('hidden');
-      const playable =
-        state !== STATE.PAUSED &&
-        state !== STATE.MENU &&
-        state !== STATE.OVER &&
-        !hsOpen &&
-        !battleOpen;
       if (e.code === 'Space') {
         e.preventDefault();
         if (playable) input.fire = true;
@@ -542,7 +586,7 @@
     });
 
     canvas.addEventListener('pointermove', (e) => {
-      if (input.aiming) return;
+      if (input.aiming || touchPlay) return;
       const rect = canvas.getBoundingClientRect();
       const mx = ((e.clientX - rect.left) / rect.width) * W;
       const my = ((e.clientY - rect.top) / rect.height) * H;
@@ -557,8 +601,35 @@
         input.detach = true;
         return;
       }
-      if (e.pointerType === 'mouse' && e.button === 0 && !e.target.closest('#controls')) {
-        // left click fires on desktop when not hitting UI
+      if (!isPlayable()) return;
+      // Ignore taps on HUD chrome
+      if (e.target.closest('#controls, .side-btn, #pauseBtn, #langToggle, #mobileHints')) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const frac = x / rect.width;
+
+      if (touchPlay) {
+        e.preventDefault();
+        if (frac < 0.5) {
+          // Left half → jump / detach
+          input.detach = true;
+        } else {
+          // Right half → aim at tap, then fire
+          const mx = (x / rect.width) * W;
+          const my = (y / rect.height) * H;
+          const sx = NinjaWorld.worldToScreen(world, player.x);
+          NinjaRope.setAimFromDir(rope, mx - sx, my - player.y);
+          input.aimDX = rope.aimX;
+          input.aimDY = rope.aimY;
+          input.fire = true;
+        }
+        return;
+      }
+
+      if (e.pointerType === 'mouse' && e.button === 0) {
+        input.fire = true;
       }
     });
   }

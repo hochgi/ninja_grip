@@ -340,6 +340,55 @@ html[dir="ltr"] #langToggle {
   display: block;
 }
 
+body.touch-play #controls {
+  display: none !important;
+}
+
+#mobileHints {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 10px;
+  z-index: 12;
+  display: none;
+  pointer-events: none;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 10px;
+  gap: 8px;
+}
+
+#mobileHints.visible {
+  display: flex;
+}
+
+#mobileHints .hint-side {
+  background: rgba(20, 17, 14, 0.55);
+  border: 1px solid rgba(216, 162, 58, 0.45);
+  border-radius: 10px;
+  color: #f0d9a8;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px 10px;
+  max-width: 28%;
+  text-align: center;
+}
+
+#mobileHints .hint-mid {
+  flex: 1;
+  text-align: center;
+  color: #c9b89a;
+  font-size: 11px;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+#mobileHints .motion-status {
+  margin-top: 2px;
+  color: #d8a23a;
+  font-size: 10px;
+}
+
 .ctrl-cluster {
   position: absolute;
   bottom: 18px;

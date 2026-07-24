@@ -1,6 +1,6 @@
 # Ninja Grip
 
-Endless rope-swinging ninja game (HTML / Canvas). Mobile-first, with **he-IL** (default) and **en-US** via i18next.
+Endless rope-swinging ninja game (HTML / Canvas). Mobile-first (Android tilt), with **he-IL** (default) and **en-US** via i18next.
 
 ## Games included
 
@@ -10,14 +10,14 @@ Endless rope-swinging ninja game (HTML / Canvas). Mobile-first, with **he-IL** (
 
 ## How to run (no build, no `npx`)
 
-Open [`index.html`](index.html) in a browser — works over `file://` (locales are embedded as JS, nothing is fetched).
+Open [`index.html`](index.html) in a browser — works over `file://` (locales are embedded as JS).
 
-**On a phone:** open the hosted game (GitHub Pages) — no app install, no `npx`, no LAN server:
+**On a phone (recommended):** open the GitHub Pages URL:
 
-- **Play:** http://genpass.hochgi.com/ninja_grip/  
-  (also: https://hochgi.github.io/ninja_grip/ → same Pages site)
+- **Play:** https://hochgi.github.io/ninja_grip/  
+  (may redirect via a custom domain — configure a dedicated subdomain if you prefer; `genpass` is unrelated)
 
-Optional local static server is still fine for development (`npx serve .` / `python3 -m http.server`), but it is **not required**.
+Optional local static server is fine for development, but **not required**.
 
 ## Language
 
@@ -25,26 +25,28 @@ Default language is Hebrew (`he-IL`, RTL). Use the **EN / עב** toggle (top cor
 
 ## Controls
 
-| Action | Mobile | Desktop |
+| Action | Android / touch | Desktop |
 |---|---|---|
-| Move | ◀ ▶ | A/D or arrows |
-| Aim | Aim pad | Mouse |
-| Fire rope | Fire | Space |
-| Shorten / lengthen | ↑ / ↓ rope | W/S or Q/E |
-| Detach / jump | Jump | Shift |
+| Swing / walk | Tilt phone sideways | A/D or arrows |
+| Shorten / lengthen rope | Tilt forward / back | W/S or Q/E |
+| Jump / detach | Tap **left** half of screen | Shift |
+| Aim + fire rope | Tap **right** half (aims at tap) | Mouse + Space |
+| Aim (desktop) | — | Mouse |
 
 ## Project layout
 
 ```
 index.html
 css/game.css
-js/…  (game modules + vendored i18next)
+js/…  (game modules + vendored i18next + motion.js)
 locales/he-IL.js  locales/en-US.js   ← loaded by <script>, no fetch
-locales/*.json                       ← same strings (edit + regenerate .js if you prefer JSON)
+locales/*.json                       ← edit these, regenerate .js
 ```
 
 ## עברית
 
-אין צורך ב־`npx`. פתחו את `index.html` בדפדפן, או שחקו מהקישור ב־GitHub Pages בטלפון:
+אין צורך ב־`npx`. בטלפון פתחו:
 
 https://hochgi.github.io/ninja_grip/
+
+בקרות באנדרואיד: הטיה לנדנוד/אורך חבל, הקשה שמאל=קפיצה, ימין=ירי.
