@@ -10,7 +10,7 @@ window.NINJA_LOCALES['en-US'] = {
   "menu": {
     "subtitle": "Endless rope ninja",
     "title": "Ninja Grip",
-    "hint": "On phone: tilt to swing / change rope length. Tap left to jump, tap right to aim+fire.",
+    "hint": "On phone: Play opens landscape fullscreen. Tilt to swing / rope length. Tap left = jump, right = aim+fire.",
     "play": "Play ▶",
     "skins": "Skins",
     "help": "How to play"
@@ -47,6 +47,11 @@ window.NINJA_LOCALES['en-US'] = {
     "tiltHint": "Tilt ↔ swing · tilt ↕ rope",
     "tiltOn": "Tilt controls on",
     "tiltOff": "Tilt unavailable — tap only"
+  },
+  "display": {
+    "rotateSub": "Landscape required",
+    "rotateTitle": "Turn your phone",
+    "rotateBody": "Hold the phone sideways (landscape). Play uses fullscreen so browser bars stay out of the way."
   },
   "skins": {
     "subtitle": "Choose your ninja",

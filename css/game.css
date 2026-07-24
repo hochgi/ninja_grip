@@ -7,19 +7,66 @@
 }
 
 html, body {
+  position: fixed;
+  inset: 0;
   width: 100%;
   height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
   overflow: hidden;
+  overscroll-behavior: none;
   background: #1a1714;
   font-family: 'Segoe UI', 'Arial', sans-serif;
   touch-action: none;
+  -webkit-text-size-adjust: 100%;
 }
 
 #game-container {
-  position: relative;
+  position: fixed;
+  inset: 0;
   width: 100%;
   height: 100%;
+  height: 100dvh;
   background: linear-gradient(180deg, #2b2420 0%, #1f1b17 55%, #14110f 100%);
+  overflow: hidden;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+#game-container:fullscreen,
+#game-container:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  background: #1a1714;
+}
+
+body.play-active {
+  background: #000;
+}
+
+#rotateGate {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 6, 4, 0.96);
+  padding: 24px;
+  text-align: center;
+}
+
+#rotateGate.visible {
+  display: flex;
+}
+
+#rotateGate .rotate-card {
+  max-width: 320px;
+}
+
+#rotateGate .rotate-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
 }
 
 canvas#gameCanvas {

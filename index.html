@@ -2,7 +2,11 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a1714">
   <title>גריפ נינג'ה</title>
   <link rel="stylesheet" href="css/game.css">
 </head>
@@ -49,6 +53,15 @@
       <div id="motionStatus" class="motion-status"></div>
     </div>
     <div class="hint-side right" data-i18n="mobile.tapFire">Tap → Fire</div>
+  </div>
+
+  <div id="rotateGate" aria-hidden="true">
+    <div class="rotate-card">
+      <div class="rotate-icon">📱↷</div>
+      <div class="title-sub" data-i18n="display.rotateSub">Landscape required</div>
+      <div class="title-main" style="font-size:28px;" data-i18n="display.rotateTitle">Turn your phone</div>
+      <p class="instructions" data-i18n="display.rotateBody">Play in horizontal (landscape) fullscreen for the best controls.</p>
+    </div>
   </div>
 
   <div class="overlay" id="menuOverlay">
@@ -165,6 +178,7 @@
 <script src="js/world.js"></script>
 <script src="js/rope.js"></script>
 <script src="js/motion.js"></script>
+<script src="js/display.js"></script>
 <script src="js/main.js"></script>
 <script src="js/battle.js"></script>
 <script src="js/hide-seek.js"></script>

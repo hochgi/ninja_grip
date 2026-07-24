@@ -43,11 +43,24 @@
 
   function resize() {
     DPR = Math.min(window.devicePixelRatio || 1, 2);
-    W = canvas.clientWidth || window.innerWidth;
-    H = canvas.clientHeight || window.innerHeight;
+    const vv = window.visualViewport;
+    W = Math.round((vv && vv.width) || canvas.clientWidth || window.innerWidth);
+    H = Math.round((vv && vv.height) || canvas.clientHeight || window.innerHeight);
+    // Prefer the game-container box after fullscreen
+    const root = document.getElementById('game-container');
+    if (root) {
+      const r = root.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        W = Math.round(r.width);
+        H = Math.round(r.height);
+      }
+    }
     canvas.width = W * DPR;
     canvas.height = H * DPR;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    if (window.NinjaDisplay) NinjaDisplay.updateRotateGate();
   }
 
   function show(el, on) {
@@ -133,6 +146,7 @@
     motionOn = false;
     touchPlay = false;
     document.body.classList.remove('touch-play');
+    if (window.NinjaDisplay) NinjaDisplay.leavePlayDisplay();
     show(document.getElementById('menuOverlay'), true);
     show(document.getElementById('gameOverOverlay'), false);
     show(document.getElementById('pauseOverlay'), false);
@@ -154,19 +168,30 @@
     showControls(true);
     showSideButtons(false);
     lastTime = 0;
-    if (touchPlay && window.NinjaMotion) {
-      NinjaMotion.enable().then((ok) => {
-        motionOn = !!ok;
-        const status = document.getElementById('motionStatus');
-        if (status) {
-          status.textContent = ok
-            ? NinjaI18n.t('mobile.tiltOn')
-            : NinjaI18n.t('mobile.tiltOff');
-        }
-        if (ok) NinjaMotion.recalibrate();
-      });
+
+    const afterDisplay = () => {
+      resize();
+      if (window.NinjaDisplay) NinjaDisplay.updateRotateGate();
+      if (touchPlay && window.NinjaMotion) {
+        NinjaMotion.enable().then((ok) => {
+          motionOn = !!ok;
+          const status = document.getElementById('motionStatus');
+          if (status) {
+            status.textContent = ok
+              ? NinjaI18n.t('mobile.tiltOn')
+              : NinjaI18n.t('mobile.tiltOff');
+          }
+          if (ok) NinjaMotion.recalibrate();
+        });
+      } else {
+        motionOn = false;
+      }
+    };
+
+    if (window.NinjaDisplay) {
+      NinjaDisplay.enterPlayDisplay().then(afterDisplay).catch(afterDisplay);
     } else {
-      motionOn = false;
+      afterDisplay();
     }
   }
 
@@ -175,6 +200,8 @@
     state = STATE.OVER;
     if (window.NinjaMotion) NinjaMotion.disable();
     motionOn = false;
+    // Keep fullscreen so Retry can continue without browser chrome returning mid-session;
+    // leave on quit-to-menu only.
     NinjaSkins.updateBest(world.distance);
     if (runCoins > 0) {
       // already added on pickup
@@ -265,6 +292,15 @@
 
   function update(dt) {
     if (state === STATE.MENU || state === STATE.OVER || state === STATE.PAUSED) return;
+    // Freeze while the landscape gate is up
+    if (
+      touchPlay &&
+      window.NinjaDisplay &&
+      document.body.classList.contains('play-active') &&
+      !NinjaDisplay.isLandscape()
+    ) {
+      return;
+    }
 
     elapsed += dt;
     player.move = input.move;
@@ -720,6 +756,22 @@
     window.addEventListener('orientationchange', () => {
       setTimeout(resize, 100);
       setTimeout(resize, 300);
+      setTimeout(resize, 600);
+    });
+    if (window.NinjaDisplay) NinjaDisplay.bind();
+    document.addEventListener('fullscreenchange', () => {
+      // If the user leaves fullscreen mid-run, pause so chrome doesn't eat the playfield unnoticed
+      if (
+        document.body.classList.contains('play-active') &&
+        window.NinjaDisplay &&
+        !NinjaDisplay.isFullscreen() &&
+        state !== STATE.MENU &&
+        state !== STATE.OVER &&
+        state !== STATE.PAUSED
+      ) {
+        togglePause();
+      }
+      resize();
     });
     await NinjaI18n.initI18n();
     refreshHudLabels();

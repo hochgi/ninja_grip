@@ -27,11 +27,13 @@ Default language is Hebrew (`he-IL`, RTL). Use the **EN / עב** toggle (top cor
 
 | Action | Android / touch | Desktop |
 |---|---|---|
+| Start | **Play** → landscape fullscreen | Play |
 | Swing / walk | Tilt phone sideways | A/D or arrows |
 | Shorten / lengthen rope | Tilt forward / back | W/S or Q/E |
 | Jump / detach | Tap **left** half of screen | Shift |
 | Aim + fire rope | Tap **right** half (aims at tap) | Mouse + Space |
-| Aim (desktop) | — | Mouse |
+
+On phones, Play requests fullscreen and locks landscape so the browser toolbar does not steal vertical space.
 
 ## Project layout
 
