@@ -8,17 +8,17 @@ Endless rope-swinging ninja game (HTML / Canvas). Mobile-first, with **he-IL** (
 - **Battle** — side arena mini-game
 - **Hide & Seek** — side finder mini-game
 
-## How to run
+## How to run (no build, no `npx`)
 
-This is a static multi-file site (locales are fetched over HTTP). Open with a local static server:
+Open [`index.html`](index.html) in a browser — works over `file://` (locales are embedded as JS, nothing is fetched).
 
-```bash
-npx --yes serve .
-```
+**On a phone:** use the hosted game URL (GitHub Pages) rather than transferring files or using a desktop LAN server:
 
-Then open the URL it prints (usually `http://localhost:3000`) on desktop or your phone (same Wi‑Fi).
+- **Play:** https://hochgi.github.io/ninja_grip/
 
-Or deploy the folder to any static host / GitHub Pages.
+(After Pages is enabled / this branch is published.)
+
+Optional local static server is still fine for development (`npx serve .` / `python3 -m http.server`), but it is **not required**.
 
 ## Language
 
@@ -39,18 +39,13 @@ Default language is Hebrew (`he-IL`, RTL). Use the **EN / עב** toggle (top cor
 ```
 index.html
 css/game.css
-js/main.js js/world.js js/rope.js js/i18n.js js/skins.js
-js/battle.js js/hide-seek.js
-js/vendor/i18next.min.js
-locales/en-US.json locales/he-IL.json
+js/…  (game modules + vendored i18next)
+locales/he-IL.js  locales/en-US.js   ← loaded by <script>, no fetch
+locales/*.json                       ← same strings (edit + regenerate .js if you prefer JSON)
 ```
 
 ## עברית
 
-משחק נינג'ה עם חבל בסגנון Worms. להרצה מקומית:
+אין צורך ב־`npx`. פתחו את `index.html` בדפדפן, או שחקו מהקישור ב־GitHub Pages בטלפון:
 
-```bash
-npx --yes serve .
-```
-
-שפה ברירת מחדל: עברית. כפתור **EN / עב** מחליף לאנגלית.
+https://hochgi.github.io/ninja_grip/

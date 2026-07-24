@@ -26,40 +26,45 @@
     });
   }
 
-  async function loadLocale(lng) {
-    const res = await fetch(`locales/${lng}.json`);
-    if (!res.ok) throw new Error('Failed to load locale ' + lng);
-    return res.json();
+  function localeBundle(lng) {
+    const bag = global.NINJA_LOCALES || {};
+    const data = bag[lng];
+    if (!data) throw new Error('Missing embedded locale: ' + lng);
+    return data;
   }
 
-  async function initI18n() {
+  function initI18n() {
     let saved = localStorage.getItem(LANG_KEY);
     if (!SUPPORTED.includes(saved)) saved = DEFAULT_LANG;
 
-    const [he, en] = await Promise.all([loadLocale('he-IL'), loadLocale('en-US')]);
+    const he = localeBundle('he-IL');
+    const en = localeBundle('en-US');
 
-    await i18next.init({
-      lng: saved,
-      fallbackLng: 'en-US',
-      resources: {
-        'he-IL': { translation: he },
-        'en-US': { translation: en },
-      },
-      interpolation: { escapeValue: false },
-    });
-
-    applyDocumentLang(i18next.language);
-    applyDomTranslations();
-    return i18next.language;
+    return i18next
+      .init({
+        lng: saved,
+        fallbackLng: 'en-US',
+        resources: {
+          'he-IL': { translation: he },
+          'en-US': { translation: en },
+        },
+        interpolation: { escapeValue: false },
+      })
+      .then(() => {
+        applyDocumentLang(i18next.language);
+        applyDomTranslations();
+        return i18next.language;
+      });
   }
 
-  async function setLanguage(lng) {
-    if (!SUPPORTED.includes(lng)) return;
-    await i18next.changeLanguage(lng);
-    localStorage.setItem(LANG_KEY, lng);
-    applyDocumentLang(lng);
-    applyDomTranslations();
-    global.dispatchEvent(new CustomEvent('ninjagrip:langchange', { detail: { lng } }));
+  function setLanguage(lng) {
+    if (!SUPPORTED.includes(lng)) return Promise.resolve();
+    return i18next.changeLanguage(lng).then(() => {
+      localStorage.setItem(LANG_KEY, lng);
+      applyDocumentLang(lng);
+      applyDomTranslations();
+      global.dispatchEvent(new CustomEvent('ninjagrip:langchange', { detail: { lng } }));
+    });
   }
 
   function toggleLanguage() {
