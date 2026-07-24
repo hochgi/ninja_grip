@@ -12,11 +12,10 @@ Endless rope-swinging ninja game (HTML / Canvas). Mobile-first, with **he-IL** (
 
 Open [`index.html`](index.html) in a browser — works over `file://` (locales are embedded as JS, nothing is fetched).
 
-**On a phone:** use the hosted game URL (GitHub Pages) rather than transferring files or using a desktop LAN server:
+**On a phone:** open the hosted game (GitHub Pages) — no app install, no `npx`, no LAN server:
 
-- **Play:** https://hochgi.github.io/ninja_grip/
-
-(After Pages is enabled / this branch is published.)
+- **Play:** http://genpass.hochgi.com/ninja_grip/  
+  (also: https://hochgi.github.io/ninja_grip/ → same Pages site)
 
 Optional local static server is still fine for development (`npx serve .` / `python3 -m http.server`), but it is **not required**.
 
