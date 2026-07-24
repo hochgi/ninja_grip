@@ -632,35 +632,59 @@
       input.aimDY = rope.aimY;
     });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Touch: tap anywhere = aim+fire; swipe up = jump. Optional Jump button too.
+    const gesture = { id: null, x0: 0, y0: 0, x1: 0, y1: 0, t0: 0 };
+    const TAP_SLOP = 22;
+    const SWIPE_UP = 48;
+
+    function aimAtClient(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const mx = ((clientX - rect.left) / rect.width) * W;
+      const my = ((clientY - rect.top) / rect.height) * H;
+      const sx = NinjaWorld.worldToScreen(world, player.x);
+      NinjaRope.setAimFromDir(rope, mx - sx, my - player.y);
+      input.aimDX = rope.aimX;
+      input.aimDY = rope.aimY;
+    }
+
+    function endTouchGesture(e) {
+      if (gesture.id == null || e.pointerId !== gesture.id) return;
+      const dx = gesture.x1 - gesture.x0;
+      const dy = gesture.y1 - gesture.y0;
+      gesture.id = null;
+
+      // Dominant upward swipe → jump/detach (does not fire)
+      if (dy < -SWIPE_UP && Math.abs(dy) > Math.abs(dx) * 1.1) {
+        input.detach = true;
+        return;
+      }
+      // Tap or drag-to-aim: fire toward release point
+      aimAtClient(gesture.x1, gesture.y1);
+      input.fire = true;
+    }
+
     canvas.addEventListener('pointerdown', (e) => {
       if (e.button === 2) {
         input.detach = true;
         return;
       }
       if (!isPlayable()) return;
-      // Ignore taps on HUD chrome
-      if (e.target.closest('#controls, .side-btn, #pauseBtn, #langToggle, #mobileHints')) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const frac = x / rect.width;
+      if (e.target.closest('#controls, .side-btn, #pauseBtn, #langToggle, #mobileHints, #mobileJumpBtn')) {
+        return;
+      }
 
       if (touchPlay) {
         e.preventDefault();
-        if (frac < 0.5) {
-          // Left half → jump / detach
-          input.detach = true;
-        } else {
-          // Right half → aim at tap, then fire
-          const mx = (x / rect.width) * W;
-          const my = (y / rect.height) * H;
-          const sx = NinjaWorld.worldToScreen(world, player.x);
-          NinjaRope.setAimFromDir(rope, mx - sx, my - player.y);
-          input.aimDX = rope.aimX;
-          input.aimDY = rope.aimY;
-          input.fire = true;
-        }
+        gesture.id = e.pointerId;
+        gesture.x0 = gesture.x1 = e.clientX;
+        gesture.y0 = gesture.y1 = e.clientY;
+        gesture.t0 = performance.now();
+        try {
+          canvas.setPointerCapture(e.pointerId);
+        } catch (_) {}
+        // Live aim preview while finger is down
+        aimAtClient(e.clientX, e.clientY);
         return;
       }
 
@@ -668,6 +692,23 @@
         input.fire = true;
       }
     });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!touchPlay || gesture.id !== e.pointerId) return;
+      gesture.x1 = e.clientX;
+      gesture.y1 = e.clientY;
+      aimAtClient(e.clientX, e.clientY);
+    });
+    canvas.addEventListener('pointerup', endTouchGesture);
+    canvas.addEventListener('pointercancel', endTouchGesture);
+
+    const jumpBtn = document.getElementById('mobileJumpBtn');
+    if (jumpBtn) {
+      jumpBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (isPlayable()) input.detach = true;
+      });
+    }
   }
 
   function wireUi() {

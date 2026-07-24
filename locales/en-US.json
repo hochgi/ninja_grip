@@ -9,7 +9,7 @@
   "menu": {
     "subtitle": "Endless rope ninja",
     "title": "Ninja Grip",
-    "hint": "On phone: Play opens landscape fullscreen. Tilt to swing / rope length. Tap left = jump, right = aim+fire.",
+    "hint": "On phone: Play opens landscape fullscreen. Tap anywhere to aim+fire. Swipe up (or Jump) to detach. Tilt to swing / rope.",
     "play": "Play ▶",
     "skins": "Skins",
     "help": "How to play"
@@ -29,9 +29,9 @@
     "subtitle": "Ninja guide",
     "title": "How to play?",
     "aimTitle": "Aim & fire",
-    "aimBody": "Desktop: mouse aim + Space/Fire. Phone: tap the right half of the screen to aim and shoot.",
+    "aimBody": "Desktop: mouse aim + Space. Phone: tap or drag anywhere to aim, release to shoot.",
     "fireTitle": "Jump / detach",
-    "fireBody": "Desktop: Shift/Jump. Phone: tap the left half of the screen.",
+    "fireBody": "Desktop: Shift. Phone: swipe up, or press the Jump button.",
     "swingTitle": "Swing & rope length",
     "swingBody": "Desktop: A/D and W/S. Phone (Android): tilt sideways to swing, tilt forward/back to shorten/lengthen.",
     "restTitle": "Platforms & handles",
@@ -41,8 +41,10 @@
     "close": "Got it! 🥋"
   },
   "mobile": {
-    "tapJump": "Tap ← Jump",
-    "tapFire": "Tap → Fire",
+    "tapJump": "Swipe ↑ Jump",
+    "tapFire": "Tap = Fire",
+    "tapHint": "Tap anywhere = aim+fire · swipe ↑ = jump",
+    "jumpBtn": "↑ Jump",
     "tiltHint": "Tilt ↔ swing · tilt ↕ rope",
     "tiltOn": "Tilt controls on",
     "tiltOff": "Tilt unavailable — tap only"
