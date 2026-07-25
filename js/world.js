@@ -1,24 +1,49 @@
 (function (global) {
-  const TARGET_TIERS = {
-    weak: { radius: 14, hangTime: 4.0, color: '#c44b3a', weight: 0.35 },
-    medium: { radius: 20, hangTime: 8.4, color: '#d8a23a', weight: 0.4 },
-    strong: { radius: 28, hangTime: 14.0, color: '#6fd86f', weight: 0.25 },
+  // Strength (color / hang time) is independent of hit size.
+  const STRENGTH = {
+    weak: { hangTime: 4.0, color: '#c44b3a', weight: 0.35 },
+    medium: { hangTime: 8.4, color: '#d8a23a', weight: 0.4 },
+    strong: { hangTime: 14.0, color: '#6fd86f', weight: 0.25 },
   };
+  const SIZES = [
+    { radius: 12, weight: 0.3 },
+    { radius: 18, weight: 0.4 },
+    { radius: 26, weight: 0.3 },
+  ];
+  // Back-compat alias
+  const TARGET_TIERS = STRENGTH;
 
-  // Forced drift once scrolling is unlocked (gentle; ramps with distance).
   const BASE_SCROLL = 42;
-  const SCROLL_RAMP = 0.008; // per meter of distance
-  // Unlock when the player first crosses this fraction of the viewport (center).
+  const SCROLL_RAMP = 0.008;
   const SCROLL_UNLOCK_FRAC = 0.5;
-  // After unlock, camera tries to keep the player around this screen-x fraction.
-  // Slightly left of center so there is room ahead to aim at targets.
   const CAMERA_ANCHOR_FRAC = 0.4;
+  // Generate this far past the leading frontier so props exist off-screen before needed.
+  const GEN_AHEAD_MIN = 2200;
+  const GEN_AHEAD_VIEWPORTS = 3.0;
 
-  function pickTier(rand) {
-    const r = rand();
-    if (r < TARGET_TIERS.weak.weight) return 'weak';
-    if (r < TARGET_TIERS.weak.weight + TARGET_TIERS.medium.weight) return 'medium';
-    return 'strong';
+  function pickWeighted(rand, items, key) {
+    key = key || 'weight';
+    let total = 0;
+    for (const it of items) total += it[key];
+    let r = rand() * total;
+    for (const it of items) {
+      r -= it[key];
+      if (r <= 0) return it;
+    }
+    return items[items.length - 1];
+  }
+
+  function pickStrength(rand) {
+    const entries = Object.keys(STRENGTH).map((id) => ({ id, ...STRENGTH[id] }));
+    return pickWeighted(rand, entries).id;
+  }
+
+  function pickSize(rand) {
+    return pickWeighted(rand, SIZES).radius;
+  }
+
+  function genAheadDist(W) {
+    return Math.max(GEN_AHEAD_MIN, (W || 800) * GEN_AHEAD_VIEWPORTS);
   }
 
   function createWorld() {
@@ -45,7 +70,7 @@
     };
   }
 
-  function resetWorld(world, H) {
+  function resetWorld(world, H, W) {
     world.cameraX = 0;
     world.distance = 0;
     world.scrollUnlocked = false;
@@ -56,18 +81,22 @@
     world.nextX = 0;
     world.seed = Math.random() * 1e9;
     world.elapsed = 0;
-    ensureChunks(world, H, 900);
+    ensureChunks(world, H, 0, genAheadDist(W));
   }
 
-  function ensureChunks(world, H, aheadX) {
+  /**
+   * Fill content out to frontierX + aheadDist.
+   * frontier should be max(camera, player) so flinging ahead never hits empty air.
+   */
+  function ensureChunks(world, H, frontierX, aheadDist) {
     const rand = mulberry32((world.seed + world.nextX) | 0);
     const groundY = H * 0.72;
-    while (world.nextX < world.cameraX + aheadX) {
+    const limit = frontierX + aheadDist;
+    while (world.nextX < limit) {
       const x = world.nextX;
       if (x === 0) {
-        // Starter platform under the player
         world.platforms.push({ x: 40, y: groundY, w: 220, h: 18 });
-        world.targets.push(makeTarget(180, groundY - 160, 'strong', rand));
+        world.targets.push(makeTarget(180, groundY - 160, rand));
         world.handles.push({ x: 280, y: groundY - 90, r: 12 });
         world.nextX = 320;
         continue;
@@ -87,7 +116,7 @@
       for (let i = 0; i < nTargets; i++) {
         const tx = x + 30 + rand() * (platW + 80);
         const ty = platY - 100 - rand() * 140;
-        world.targets.push(makeTarget(tx, ty, pickTier(rand), rand));
+        world.targets.push(makeTarget(tx, ty, rand));
       }
 
       if (rand() < 0.7) {
@@ -100,17 +129,13 @@
         });
       }
 
-      // Occasional floating coin / extra target over gaps
       if (rand() < 0.4) {
-        world.targets.push(
-          makeTarget(x + platW + gap * 0.5, platY - 80 - rand() * 100, pickTier(rand), rand)
-        );
+        world.targets.push(makeTarget(x + platW + gap * 0.5, platY - 80 - rand() * 100, rand));
       }
 
       world.nextX = x + platW + gap;
     }
 
-    // Cull far behind
     const minX = world.cameraX - 400;
     world.platforms = world.platforms.filter((p) => p.x + p.w > minX);
     world.handles = world.handles.filter((h) => h.x > minX);
@@ -118,14 +143,16 @@
     world.coins = world.coins.filter((c) => c.x > minX && (!c.collected || c.popLife > 0));
   }
 
-  function makeTarget(x, y, tier, rand) {
-    const def = TARGET_TIERS[tier];
+  function makeTarget(x, y, rand) {
+    const strengthId = pickStrength(rand);
+    const def = STRENGTH[strengthId];
     const hang = def.hangTime * (0.85 + rand() * 0.3);
+    const radius = pickSize(rand);
     return {
       x,
       y,
-      tier,
-      radius: def.radius,
+      tier: strengthId,
+      radius,
       color: def.color,
       maxDurability: hang,
       durability: hang,
@@ -138,20 +165,17 @@
     return BASE_SCROLL + world.distance * SCROLL_RAMP;
   }
 
-  /**
-   * Camera stays still until the player crosses mid-screen (practice window).
-   * After unlock: cameraX = max(cameraX + forcedScroll*dt, player.x - anchor),
-   * so rushing ahead pulls the view forward, while lagging still faces slow pressure.
-   */
   function updateCamera(world, dt, H, playerX, W) {
     world.elapsed += dt;
     const screenX = playerX - world.cameraX;
+    const ahead = genAheadDist(W);
+    const frontier = Math.max(world.cameraX, playerX);
 
     if (!world.scrollUnlocked) {
       if (screenX >= W * SCROLL_UNLOCK_FRAC) {
         world.scrollUnlocked = true;
       } else {
-        ensureChunks(world, H, 1000);
+        ensureChunks(world, H, frontier, ahead);
         return;
       }
     }
@@ -160,7 +184,7 @@
     const follow = playerX - W * CAMERA_ANCHOR_FRAC;
     world.cameraX = Math.max(forced, follow);
     world.distance = Math.max(world.distance, world.cameraX / 10);
-    ensureChunks(world, H, 1000);
+    ensureChunks(world, H, Math.max(world.cameraX, playerX), ahead);
   }
 
   function worldToScreen(world, x) {
@@ -168,7 +192,6 @@
   }
 
   function dangerFactor(screenX, screenY, W, H, scrollUnlocked) {
-    // 1 at kill edge, 0 when safe. Bottom always; left only after scroll unlock.
     let f = 0;
     if (scrollUnlocked) {
       const leftZone = W * 0.1;
@@ -188,7 +211,6 @@
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
 
-    // Parallax beams
     ctx.strokeStyle = 'rgba(216,162,58,0.06)';
     ctx.lineWidth = 2;
     const offset = (world.cameraX * 0.2) % 80;
@@ -201,7 +223,6 @@
   }
 
   function drawWorld(ctx, world, W, H, time) {
-    // Platforms
     for (const p of world.platforms) {
       const sx = worldToScreen(world, p.x);
       if (sx + p.w < -20 || sx > W + 20) continue;
@@ -211,7 +232,6 @@
       ctx.fillRect(sx, p.y, p.w, 3);
     }
 
-    // Handles
     for (const h of world.handles) {
       const sx = worldToScreen(world, h.x);
       if (sx < -30 || sx > W + 30) continue;
@@ -230,7 +250,6 @@
       ctx.stroke();
     }
 
-    // Targets
     for (const t of world.targets) {
       if (t.broken || t.removed) continue;
       const sx = worldToScreen(world, t.x);
@@ -253,7 +272,6 @@
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Durability arc
       ctx.strokeStyle = ratio < 0.35 ? '#ff4d4d' : '#ffffff';
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -261,7 +279,6 @@
       ctx.stroke();
     }
 
-    // Coins
     for (const c of world.coins) {
       if (c.collected && c.popLife <= 0) continue;
       let sx = worldToScreen(world, c.x);
@@ -293,13 +310,11 @@
   function drawDangerVignette(ctx, W, H, factor) {
     if (factor <= 0) return;
     const a = factor * 0.55;
-    // Left edge
     const lg = ctx.createLinearGradient(0, 0, W * 0.12, 0);
     lg.addColorStop(0, `rgba(200,30,30,${a})`);
     lg.addColorStop(1, 'rgba(200,30,30,0)');
     ctx.fillStyle = lg;
     ctx.fillRect(0, 0, W * 0.12, H);
-    // Bottom edge
     const bg = ctx.createLinearGradient(0, H, 0, H - H * 0.12);
     bg.addColorStop(0, `rgba(200,30,30,${a})`);
     bg.addColorStop(1, 'rgba(200,30,30,0)');
@@ -337,6 +352,7 @@
 
   global.NinjaWorld = {
     TARGET_TIERS,
+    STRENGTH,
     BASE_SCROLL,
     createWorld,
     resetWorld,

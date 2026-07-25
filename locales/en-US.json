@@ -35,7 +35,7 @@
     "swingTitle": "Swing & rope length",
     "swingBody": "Desktop: A/D and W/S. Phone (Android): tilt sideways to swing, tilt forward/back to shorten/lengthen.",
     "restTitle": "Platforms & handles",
-    "restBody": "Stand on platforms or hang from handles to aim safely. Targets break if you hang too long.",
+    "restBody": "Stand on platforms or hang from handles to aim safely. Target color = strength (how long it holds); size is separate — big red and small green both happen.",
     "scrollTitle": "Don't fall behind",
     "scrollBody": "The camera stays still until you pass mid-screen. After that it drifts right — red edges warn you; leave the frame and it's game over.",
     "close": "Got it! 🥋"

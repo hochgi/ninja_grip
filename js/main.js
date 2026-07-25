@@ -125,7 +125,7 @@
   }
 
   function resetRun() {
-    NinjaWorld.resetWorld(world, H);
+    NinjaWorld.resetWorld(world, H, W);
     Object.assign(rope, NinjaRope.createRopeState());
     const startPlat = world.platforms[0];
     player.x = startPlat.x + 60;
@@ -635,7 +635,6 @@
 
     // Touch: tap anywhere = aim+fire; swipe up = jump. Optional Jump button too.
     const gesture = { id: null, x0: 0, y0: 0, x1: 0, y1: 0, t0: 0 };
-    const TAP_SLOP = 22;
     const SWIPE_UP = 48;
 
     function aimAtClient(clientX, clientY) {
@@ -818,7 +817,7 @@
     refreshHudLabels();
     setupControls();
     wireUi();
-    NinjaWorld.resetWorld(world, H);
+    NinjaWorld.resetWorld(world, H, W);
     goMenu();
     draw();
     rafId = requestAnimationFrame(loop);

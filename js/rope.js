@@ -7,6 +7,9 @@
   const GRAVITY = 1400;
   // Stronger player torque so swing builds momentum quickly
   const SWING_INPUT = 5.2;
+  // Hard caps — prevent infinite spin / rocket flings past the course
+  const MAX_OMEGA = 3.2; // rad/s
+  const MAX_FLING_SPEED = 460; // px/s on detach / snap
   // After a target snaps, gravity eases in so the player can re-shoot
   const SNAP_FALL_GRACE = 0.5;
   const SNAP_FALL_MIN_G = 0.1;
@@ -36,6 +39,22 @@
     return (vx * Math.cos(angle) - vy * Math.sin(angle)) / Math.max(length, 1);
   }
 
+  function clampOmega(omega) {
+    if (omega > MAX_OMEGA) return MAX_OMEGA;
+    if (omega < -MAX_OMEGA) return -MAX_OMEGA;
+    return omega;
+  }
+
+  function clampFling(v) {
+    const s = Math.hypot(v.vx, v.vy);
+    if (s > MAX_FLING_SPEED && s > 0) {
+      const k = MAX_FLING_SPEED / s;
+      v.vx *= k;
+      v.vy *= k;
+    }
+    return v;
+  }
+
   function setAimFromDir(rope, dx, dy) {
     const len = Math.hypot(dx, dy) || 1;
     rope.aimX = dx / len;
@@ -59,7 +78,7 @@
   function detach(rope, player) {
     if (!rope.attached) return false;
     const a = rope.attached;
-    const v = tangentialVelocity(a.angle, a.omega, a.length);
+    const v = clampFling(tangentialVelocity(a.angle, a.omega, a.length));
     player.vx = v.vx;
     player.vy = v.vy;
     rope.attached = null;
@@ -72,7 +91,7 @@
     let length = Math.hypot(dx, dy);
     length = Math.max(ROPE_MIN_LEN, Math.min(ROPE_MAX_LEN, length));
     const angle = Math.atan2(dx, dy); // 0 = hanging straight down
-    const omega = omegaFromVelocity(angle, length, player.vx, player.vy);
+    const omega = clampOmega(omegaFromVelocity(angle, length, player.vx, player.vy));
     rope.attached = { target, length, angle, omega };
     rope.projectile = null;
     player.vx = 0;
@@ -97,7 +116,7 @@
   }
 
   function beginSnapFall(rope, player, angle, omega, length) {
-    const v = tangentialVelocity(angle, omega, length);
+    const v = clampFling(tangentialVelocity(angle, omega, length));
     player.vx = v.vx;
     // Soften initial downward plunge so a re-shot is possible
     player.vy = Math.min(v.vy, 60);
@@ -113,7 +132,7 @@
       return;
     }
 
-    // Length change — shortening spins you up (angular-momentum feel)
+    // Length change — shortening spins you up, but still within omega cap
     if (rope.lengthInput !== 0) {
       const oldLen = a.length;
       a.length += rope.lengthInput * 140 * dt;
@@ -121,13 +140,18 @@
       if (a.length < oldLen && a.length > 0) {
         a.omega *= oldLen / a.length;
       }
+      a.omega = clampOmega(a.omega);
     }
 
     // Pendulum: alpha = -(g/L) sin(theta) + input torque
     const input = player.move * SWING_INPUT;
     const alpha = -(GRAVITY / a.length) * Math.sin(a.angle) + input;
     a.omega += alpha * dt;
-    a.omega *= Math.pow(0.995, dt * 60); // light damping
+    // Extra damping once near the cap so spin can't be held at the limit forever
+    const spinRatio = Math.min(1, Math.abs(a.omega) / MAX_OMEGA);
+    const damp = 0.995 - 0.02 * spinRatio * spinRatio;
+    a.omega *= Math.pow(damp, dt * 60);
+    a.omega = clampOmega(a.omega);
     a.angle += a.omega * dt;
 
     player.x = a.target.x + Math.sin(a.angle) * a.length;
