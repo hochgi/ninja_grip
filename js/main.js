@@ -323,6 +323,8 @@
     if (keys['a'] || keys['arrowleft']) player.move = -1;
     if (keys['d'] || keys['arrowright']) player.move = 1;
 
+    // Shared vertical axis: rope length while swinging, climb while on a ladder
+    // (mutually exclusive states — no ambiguity).
     rope.lengthInput = 0;
     if (input.shorten || keys['w'] || keys['q'] || keys['arrowup']) rope.lengthInput = -1;
     if (input.lengthen || keys['s'] || keys['e'] || keys['arrowdown']) rope.lengthInput = 1;

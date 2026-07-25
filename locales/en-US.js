@@ -33,8 +33,8 @@ window.NINJA_LOCALES['en-US'] = {
     "aimBody": "Desktop: mouse aim + Space. Phone: tap or drag anywhere to aim, release to shoot.",
     "fireTitle": "Jump / detach",
     "fireBody": "Desktop: Shift. Phone: swipe up, or press the Jump button.",
-    "swingTitle": "Swing & rope length",
-    "swingBody": "Desktop: A/D and W/S. Phone (Android): tilt sideways to swing, tilt forward/back to shorten/lengthen.",
+    "swingTitle": "Swing, rope & ladders",
+    "swingBody": "Desktop: A/D move, W/S or ↑/↓ for rope length and ladder climb (same keys — you can't do both at once). Phone: tilt sideways to swing, tilt forward/back for vertical.",
     "restTitle": "Platforms & handles",
     "restBody": "Stand on platforms or hang from handles to aim safely. Target color = strength (how long it holds); size is separate — big red and small green both happen.",
     "scrollTitle": "Don't fall behind",
@@ -46,7 +46,7 @@ window.NINJA_LOCALES['en-US'] = {
     "tapFire": "Tap = Fire",
     "tapHint": "Tap anywhere = aim+fire · swipe ↑ = jump",
     "jumpBtn": "↑ Jump",
-    "tiltHint": "Tilt ↔ swing · tilt ↕ rope",
+    "tiltHint": "Tilt ↔ swing · tilt ↕ rope/climb",
     "tiltOn": "Tilt controls on",
     "tiltOff": "Tilt unavailable — tap only"
   },
@@ -92,8 +92,8 @@ window.NINJA_LOCALES['en-US'] = {
   },
   "controls": {
     "fire": "Fire",
-    "shorten": "↑ Rope",
-    "lengthen": "↓ Rope",
+    "shorten": "↑",
+    "lengthen": "↓",
     "detach": "Jump",
     "move": "Move"
   },

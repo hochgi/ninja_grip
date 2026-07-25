@@ -29,7 +29,8 @@ Default language is Hebrew (`he-IL`, RTL). Use the **EN / עב** toggle (top cor
 |---|---|---|
 | Start | **Play** → landscape fullscreen | Play |
 | Swing / walk | Tilt phone sideways | A/D or arrows |
-| Shorten / lengthen rope | Tilt forward / back | W/S or Q/E |
+| Shorten rope / climb up | Tilt forward | W/↑ |
+| Lengthen rope / climb down | Tilt back | S/↓ |
 | Jump / detach | **Swipe up**, or **Jump** button | Shift |
 | Aim + fire rope | **Tap / drag anywhere**, release to fire | Mouse + Space |
 
