@@ -20,6 +20,11 @@
   // Generate this far past the leading frontier so props exist off-screen before needed.
   const GEN_AHEAD_MIN = 2200;
   const GEN_AHEAD_VIEWPORTS = 3.0;
+  // Broken targets self-heal so a snap nearby doesn't force a suicide run.
+  const HEAL_DELAY = 1.35; // seconds after snap before regen starts
+  const HEAL_RATE = 0.5; // fraction of maxDurability restored per second while broken
+  const HEAL_READY = 0.4; // usable again once healed to this fraction
+  const PASSIVE_HEAL = 0.18; // slow regen for damaged but still-live targets
 
   function pickWeighted(rand, items, key) {
     key = key || 'weight';
@@ -157,8 +162,29 @@
       maxDurability: hang,
       durability: hang,
       broken: false,
+      brokenFor: 0,
       removed: false,
     };
+  }
+
+  /**
+   * Regen damaged/broken targets. busyTarget (currently gripped) skips healing.
+   */
+  function updateTargets(world, dt, busyTarget) {
+    for (const t of world.targets) {
+      if (t.removed || t === busyTarget) continue;
+      if (t.broken) {
+        t.brokenFor = (t.brokenFor || 0) + dt;
+        if (t.brokenFor < HEAL_DELAY) continue;
+        t.durability = Math.min(t.maxDurability, t.durability + t.maxDurability * HEAL_RATE * dt);
+        if (t.durability >= t.maxDurability * HEAL_READY) {
+          t.broken = false;
+          t.brokenFor = 0;
+        }
+      } else if (t.durability < t.maxDurability) {
+        t.durability = Math.min(t.maxDurability, t.durability + t.maxDurability * PASSIVE_HEAL * dt);
+      }
+    }
   }
 
   function scrollSpeed(world) {
@@ -251,11 +277,12 @@
     }
 
     for (const t of world.targets) {
-      if (t.broken || t.removed) continue;
+      if (t.removed) continue;
       const sx = worldToScreen(world, t.x);
       if (sx < -40 || sx > W + 40) continue;
-      const ratio = t.durability / t.maxDurability;
-      ctx.strokeStyle = 'rgba(200,180,140,0.5)';
+      const ratio = t.maxDurability > 0 ? t.durability / t.maxDurability : 0;
+
+      ctx.strokeStyle = t.broken ? 'rgba(200,180,140,0.22)' : 'rgba(200,180,140,0.5)';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(sx, t.y - t.radius - 30);
@@ -263,16 +290,18 @@
       ctx.stroke();
 
       ctx.fillStyle = t.color;
-      ctx.globalAlpha = 0.35 + ratio * 0.65;
+      ctx.globalAlpha = t.broken ? 0.12 + ratio * 0.35 : 0.35 + ratio * 0.65;
       ctx.beginPath();
       ctx.arc(sx, t.y, t.radius, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = '#f0d9a8';
+      ctx.strokeStyle = t.broken ? 'rgba(240,217,168,0.35)' : '#f0d9a8';
       ctx.lineWidth = 2;
+      ctx.setLineDash(t.broken ? [4, 4] : []);
       ctx.stroke();
+      ctx.setLineDash([]);
 
-      ctx.strokeStyle = ratio < 0.35 ? '#ff4d4d' : '#ffffff';
+      ctx.strokeStyle = t.broken ? 'rgba(255,180,80,0.7)' : ratio < 0.35 ? '#ff4d4d' : '#ffffff';
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(sx, t.y, t.radius + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ratio);
@@ -357,6 +386,7 @@
     createWorld,
     resetWorld,
     updateCamera,
+    updateTargets,
     scrollSpeed,
     worldToScreen,
     dangerFactor,

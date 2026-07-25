@@ -198,6 +198,7 @@
     if (a.target.durability <= 0) {
       a.target.durability = 0;
       a.target.broken = true;
+      a.target.brokenFor = 0;
       beginSnapFall(rope, player, a.angle, a.omega, a.length, a.maxFling);
     }
   }

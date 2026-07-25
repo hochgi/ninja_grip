@@ -334,6 +334,7 @@
     }
 
     NinjaWorld.updateCamera(world, dt, H, player.x, W);
+    NinjaWorld.updateTargets(world, dt, rope.attached && rope.attached.target);
 
     const gScale = NinjaRope.fallGravityScale(player);
 
