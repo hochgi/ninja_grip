@@ -20,11 +20,12 @@
   // Generate this far past the leading frontier so props exist off-screen before needed.
   const GEN_AHEAD_MIN = 2200;
   const GEN_AHEAD_VIEWPORTS = 3.0;
-  // Broken targets self-heal so a snap nearby doesn't force a suicide run.
-  const HEAL_DELAY = 1.35; // seconds after snap before regen starts
-  const HEAL_RATE = 0.5; // fraction of maxDurability restored per second while broken
-  const HEAL_READY = 0.4; // usable again once healed to this fraction
-  const PASSIVE_HEAL = 0.18; // slow regen for damaged but still-live targets
+  // Gradual regen whenever below full (skipped while currently gripped).
+  const HEAL_RATE = 0.12; // ~8s empty → full
+  const ATTACH_MIN = 0.2; // seconds of rope-time needed to latch again
+  // Occasional handle-run stretches (jump/hang parkour).
+  const PARKOUR_CHANCE = 0.16;
+  const PARKOUR_MIN_X = 700;
 
   function pickWeighted(rand, items, key) {
     key = key || 'weight';
@@ -63,6 +64,7 @@
       nextX: 0,
       seed: Math.random() * 1e9,
       elapsed: 0,
+      parkourRemain: 0,
     };
   }
 
@@ -86,6 +88,7 @@
     world.nextX = 0;
     world.seed = Math.random() * 1e9;
     world.elapsed = 0;
+    world.parkourRemain = 0;
     ensureChunks(world, H, 0, genAheadDist(W));
   }
 
@@ -104,6 +107,49 @@
         world.targets.push(makeTarget(180, groundY - 160, rand));
         world.handles.push({ x: 280, y: groundY - 90, r: 12 });
         world.nextX = 320;
+        continue;
+      }
+
+      // Start a short handle-run (few/no platforms) every so often.
+      if (world.parkourRemain <= 0 && x > PARKOUR_MIN_X && rand() < PARKOUR_CHANCE) {
+        world.parkourRemain = 2 + Math.floor(rand() * 3); // 2–4 segments
+      }
+
+      if (world.parkourRemain > 0) {
+        world.parkourRemain -= 1;
+        const span = 150 + rand() * 110;
+        const baseY = groundY - 50 - rand() * (H * 0.28);
+        const nHandles = 2 + (rand() < 0.55 ? 1 : 0);
+        for (let i = 0; i < nHandles; i++) {
+          const t = (i + 0.5) / nHandles;
+          const hx = x + 24 + t * (span - 48) + (rand() - 0.5) * 18;
+          const hy = baseY - 40 - rand() * 90 + (i % 2) * 28;
+          world.handles.push({ x: hx, y: hy, r: 11 });
+        }
+        // Occasional landing pad so the stretch isn't pure free-fall
+        if (rand() < 0.38) {
+          const pw = 64 + rand() * 56;
+          world.platforms.push({
+            x: x + span * (0.25 + rand() * 0.35),
+            y: baseY + 20 + rand() * 40,
+            w: pw,
+            h: 16,
+          });
+        }
+        // Sparse escape targets — parkour is the main verb here
+        if (rand() < 0.28) {
+          world.targets.push(makeTarget(x + span * 0.55, baseY - 110 - rand() * 60, rand));
+        }
+        if (rand() < 0.6) {
+          world.coins.push({
+            x: x + span * 0.5,
+            y: baseY - 30,
+            collected: false,
+            popLife: 0,
+            bob: rand() * Math.PI * 2,
+          });
+        }
+        world.nextX = x + span;
         continue;
       }
 
@@ -161,30 +207,24 @@
       color: def.color,
       maxDurability: hang,
       durability: hang,
-      broken: false,
-      brokenFor: 0,
       removed: false,
     };
   }
 
-  /**
-   * Regen damaged/broken targets. busyTarget (currently gripped) skips healing.
-   */
+  /** Slow regen toward full rope-time; busy (gripped) target skips healing. */
   function updateTargets(world, dt, busyTarget) {
     for (const t of world.targets) {
       if (t.removed || t === busyTarget) continue;
-      if (t.broken) {
-        t.brokenFor = (t.brokenFor || 0) + dt;
-        if (t.brokenFor < HEAL_DELAY) continue;
-        t.durability = Math.min(t.maxDurability, t.durability + t.maxDurability * HEAL_RATE * dt);
-        if (t.durability >= t.maxDurability * HEAL_READY) {
-          t.broken = false;
-          t.brokenFor = 0;
-        }
-      } else if (t.durability < t.maxDurability) {
-        t.durability = Math.min(t.maxDurability, t.durability + t.maxDurability * PASSIVE_HEAL * dt);
+      if (t.durability >= t.maxDurability) {
+        t.durability = t.maxDurability;
+        continue;
       }
+      t.durability = Math.min(t.maxDurability, t.durability + t.maxDurability * HEAL_RATE * dt);
     }
+  }
+
+  function targetUsable(t) {
+    return t && !t.removed && t.durability > ATTACH_MIN;
   }
 
   function scrollSpeed(world) {
@@ -281,8 +321,9 @@
       const sx = worldToScreen(world, t.x);
       if (sx < -40 || sx > W + 40) continue;
       const ratio = t.maxDurability > 0 ? t.durability / t.maxDurability : 0;
+      const depleted = !targetUsable(t);
 
-      ctx.strokeStyle = t.broken ? 'rgba(200,180,140,0.22)' : 'rgba(200,180,140,0.5)';
+      ctx.strokeStyle = depleted ? 'rgba(200,180,140,0.28)' : 'rgba(200,180,140,0.5)';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(sx, t.y - t.radius - 30);
@@ -290,18 +331,16 @@
       ctx.stroke();
 
       ctx.fillStyle = t.color;
-      ctx.globalAlpha = t.broken ? 0.12 + ratio * 0.35 : 0.35 + ratio * 0.65;
+      ctx.globalAlpha = depleted ? 0.18 + ratio * 0.4 : 0.35 + ratio * 0.65;
       ctx.beginPath();
       ctx.arc(sx, t.y, t.radius, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = t.broken ? 'rgba(240,217,168,0.35)' : '#f0d9a8';
+      ctx.strokeStyle = depleted ? 'rgba(240,217,168,0.45)' : '#f0d9a8';
       ctx.lineWidth = 2;
-      ctx.setLineDash(t.broken ? [4, 4] : []);
       ctx.stroke();
-      ctx.setLineDash([]);
 
-      ctx.strokeStyle = t.broken ? 'rgba(255,180,80,0.7)' : ratio < 0.35 ? '#ff4d4d' : '#ffffff';
+      ctx.strokeStyle = ratio < 0.35 ? '#ff4d4d' : '#ffffff';
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(sx, t.y, t.radius + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ratio);
@@ -371,7 +410,7 @@
 
   function targetHit(world, x, y) {
     for (const t of world.targets) {
-      if (t.broken || t.removed) continue;
+      if (!targetUsable(t)) continue;
       const dx = x - t.x;
       const dy = y - t.y;
       if (dx * dx + dy * dy <= t.radius * t.radius) return t;

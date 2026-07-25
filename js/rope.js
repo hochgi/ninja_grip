@@ -161,7 +161,7 @@
 
   function updateAttached(rope, player, dt) {
     const a = rope.attached;
-    if (!a || !a.target || a.target.broken) {
+    if (!a || !a.target) {
       rope.attached = null;
       return;
     }
@@ -197,8 +197,6 @@
     a.target.durability -= dt;
     if (a.target.durability <= 0) {
       a.target.durability = 0;
-      a.target.broken = true;
-      a.target.brokenFor = 0;
       beginSnapFall(rope, player, a.angle, a.omega, a.length, a.maxFling);
     }
   }
