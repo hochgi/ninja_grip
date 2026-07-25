@@ -351,8 +351,13 @@
         state = STATE.AIR;
       }
     } else if (state === STATE.ROPE_ATTACHED) {
+      const prevY = player.y;
       NinjaRope.updateAttached(rope, player, dt);
-      if (!rope.attached) state = STATE.AIR;
+      if (rope.attached) {
+        NinjaRope.resolveAttachedPlatform(rope, player, world, prevY, player.feet);
+      } else {
+        state = STATE.AIR;
+      }
     } else if (state === STATE.HANDLE && attachedHandle) {
       player.x = attachedHandle.x;
       player.y = attachedHandle.y + 8;

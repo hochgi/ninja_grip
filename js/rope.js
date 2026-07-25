@@ -7,9 +7,13 @@
   const GRAVITY = 1400;
   // Stronger player torque so swing builds momentum quickly
   const SWING_INPUT = 5.2;
-  // Hard caps — prevent infinite spin / rocket flings past the course
-  const MAX_OMEGA = 3.2; // rad/s
-  const MAX_FLING_SPEED = 460; // px/s on detach / snap
+  // Spin caps — base is safe; weaker/smaller targets allow a bit more kick (not uncapped).
+  const MAX_OMEGA_BASE = 3.0;
+  const MAX_OMEGA_BONUS = 1.7; // tiny+weak peak ≈ 4.7 rad/s
+  const MAX_FLING_BASE = 420;
+  const MAX_FLING_BONUS = 200; // peak ≈ 620 px/s
+  const SIZE_MIN = 12;
+  const SIZE_MAX = 26;
   // After a target snaps, gravity eases in so the player can re-shoot
   const SNAP_FALL_GRACE = 0.5;
   const SNAP_FALL_MIN_G = 0.1;
@@ -20,7 +24,7 @@
       aimX: 1,
       aimY: -1,
       projectile: null, // {x,y,vx,vy}
-      attached: null, // {target, length, angle, omega}
+      attached: null, // {target, length, angle, omega, maxOmega, maxFling}
       cooldown: 0,
       lengthInput: 0, // -1 shorten, +1 lengthen
     };
@@ -39,16 +43,34 @@
     return (vx * Math.cos(angle) - vy * Math.sin(angle)) / Math.max(length, 1);
   }
 
-  function clampOmega(omega) {
-    if (omega > MAX_OMEGA) return MAX_OMEGA;
-    if (omega < -MAX_OMEGA) return -MAX_OMEGA;
+  /** 0 = large+strong (least spin), 1 = small+weak (most spin). */
+  function targetSpice(target) {
+    if (!target) return 0;
+    const sizeT = 1 - (Math.max(SIZE_MIN, Math.min(SIZE_MAX, target.radius)) - SIZE_MIN) / (SIZE_MAX - SIZE_MIN);
+    const strengthT = target.tier === 'weak' ? 1 : target.tier === 'medium' ? 0.5 : 0;
+    return Math.max(0, Math.min(1, 0.55 * sizeT + 0.45 * strengthT));
+  }
+
+  function limitsForTarget(target) {
+    const spice = targetSpice(target);
+    return {
+      maxOmega: MAX_OMEGA_BASE + MAX_OMEGA_BONUS * spice,
+      maxFling: MAX_FLING_BASE + MAX_FLING_BONUS * spice,
+    };
+  }
+
+  function clampOmega(omega, maxOmega) {
+    const cap = maxOmega != null ? maxOmega : MAX_OMEGA_BASE;
+    if (omega > cap) return cap;
+    if (omega < -cap) return -cap;
     return omega;
   }
 
-  function clampFling(v) {
+  function clampFling(v, maxFling) {
+    const cap = maxFling != null ? maxFling : MAX_FLING_BASE;
     const s = Math.hypot(v.vx, v.vy);
-    if (s > MAX_FLING_SPEED && s > 0) {
-      const k = MAX_FLING_SPEED / s;
+    if (s > cap && s > 0) {
+      const k = cap / s;
       v.vx *= k;
       v.vy *= k;
     }
@@ -78,7 +100,7 @@
   function detach(rope, player) {
     if (!rope.attached) return false;
     const a = rope.attached;
-    const v = clampFling(tangentialVelocity(a.angle, a.omega, a.length));
+    const v = clampFling(tangentialVelocity(a.angle, a.omega, a.length), a.maxFling);
     player.vx = v.vx;
     player.vy = v.vy;
     rope.attached = null;
@@ -91,8 +113,20 @@
     let length = Math.hypot(dx, dy);
     length = Math.max(ROPE_MIN_LEN, Math.min(ROPE_MAX_LEN, length));
     const angle = Math.atan2(dx, dy); // 0 = hanging straight down
-    const omega = clampOmega(omegaFromVelocity(angle, length, player.vx, player.vy));
-    rope.attached = { target, length, angle, omega };
+    const lim = limitsForTarget(target);
+    const omega = clampOmega(
+      omegaFromVelocity(angle, length, player.vx, player.vy),
+      lim.maxOmega
+    );
+    rope.attached = {
+      target,
+      length,
+      angle,
+      omega,
+      maxOmega: lim.maxOmega,
+      maxFling: lim.maxFling,
+      onPlatform: false,
+    };
     rope.projectile = null;
     player.vx = 0;
     player.vy = 0;
@@ -115,8 +149,8 @@
     return null;
   }
 
-  function beginSnapFall(rope, player, angle, omega, length) {
-    const v = clampFling(tangentialVelocity(angle, omega, length));
+  function beginSnapFall(rope, player, angle, omega, length, maxFling) {
+    const v = clampFling(tangentialVelocity(angle, omega, length), maxFling);
     player.vx = v.vx;
     // Soften initial downward plunge so a re-shot is possible
     player.vy = Math.min(v.vy, 60);
@@ -132,7 +166,9 @@
       return;
     }
 
-    // Length change — shortening spins you up, but still within omega cap
+    const maxOmega = a.maxOmega != null ? a.maxOmega : MAX_OMEGA_BASE;
+
+    // Length change — shortening spins you up, but still within this target's omega cap
     if (rope.lengthInput !== 0) {
       const oldLen = a.length;
       a.length += rope.lengthInput * 140 * dt;
@@ -140,29 +176,64 @@
       if (a.length < oldLen && a.length > 0) {
         a.omega *= oldLen / a.length;
       }
-      a.omega = clampOmega(a.omega);
+      a.omega = clampOmega(a.omega, maxOmega);
     }
 
     // Pendulum: alpha = -(g/L) sin(theta) + input torque
+    // While standing on a platform with rope live, only allow lift-off torque (no dig-in).
     const input = player.move * SWING_INPUT;
     const alpha = -(GRAVITY / a.length) * Math.sin(a.angle) + input;
     a.omega += alpha * dt;
-    // Extra damping once near the cap so spin can't be held at the limit forever
-    const spinRatio = Math.min(1, Math.abs(a.omega) / MAX_OMEGA);
+    const spinRatio = Math.min(1, Math.abs(a.omega) / Math.max(0.001, maxOmega));
     const damp = 0.995 - 0.02 * spinRatio * spinRatio;
     a.omega *= Math.pow(damp, dt * 60);
-    a.omega = clampOmega(a.omega);
+    a.omega = clampOmega(a.omega, maxOmega);
     a.angle += a.omega * dt;
 
     player.x = a.target.x + Math.sin(a.angle) * a.length;
     player.y = a.target.y + Math.cos(a.angle) * a.length;
+    a.onPlatform = false;
 
     a.target.durability -= dt;
     if (a.target.durability <= 0) {
       a.target.durability = 0;
       a.target.broken = true;
-      beginSnapFall(rope, player, a.angle, a.omega, a.length);
+      beginSnapFall(rope, player, a.angle, a.omega, a.length, a.maxFling);
     }
+  }
+
+  /**
+   * One-way platform support while rope is live: land from above, pass through from below.
+   * Keeps the rope attached and refits angle/length to the standing pose.
+   */
+  function resolveAttachedPlatform(rope, player, world, prevY, feet) {
+    const a = rope.attached;
+    if (!a || !a.target) return false;
+
+    const prevFeet = prevY + feet;
+    const feetY = player.y + feet;
+    // Only when moving downward onto a surface
+    if (feetY < prevFeet - 0.5) return false;
+
+    const plat = global.NinjaWorld.platformAt(world, player.x, player.y, player.w || 12, feet);
+    if (!plat) return false;
+
+    // Must have been at/above the top before this frame (one-way from below)
+    if (prevFeet > plat.y + 4) return false;
+    if (feetY < plat.y - 2) return false;
+
+    player.y = plat.y - feet;
+    const dx = player.x - a.target.x;
+    const dy = player.y - a.target.y;
+    let length = Math.hypot(dx, dy);
+    length = Math.max(ROPE_MIN_LEN, Math.min(ROPE_MAX_LEN, length));
+    a.length = length;
+    a.angle = Math.atan2(dx, dy);
+    // Kill downward spin into the floor; keep a little horizontal carry
+    a.omega *= 0.25;
+    a.omega = clampOmega(a.omega, a.maxOmega);
+    a.onPlatform = true;
+    return true;
   }
 
   /** Gravity multiplier while fallGrace is active (ease-in from SNAP_FALL_MIN_G → 1). */
@@ -240,6 +311,7 @@
     attachTo,
     updateProjectile,
     updateAttached,
+    resolveAttachedPlatform,
     fallGravityScale,
     tickFallGrace,
     drawAim,
