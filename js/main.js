@@ -28,6 +28,8 @@
   let runCoins = 0;
   let attachedHandle = null;
   let attachedLadder = null;
+  let ignoreHandle = null; // don't re-grab this handle right after leaping off
+  let ignoreHandleT = 0;
   let touchPlay = false; // mobile/touch session: tilt + side taps
   let motionOn = false;
 
@@ -138,6 +140,8 @@
     player.fallGrace = 0;
     attachedHandle = null;
     attachedLadder = null;
+    ignoreHandle = null;
+    ignoreHandleT = 0;
     runCoins = 0;
     elapsed = 0;
     lastTime = 0;
@@ -264,6 +268,18 @@
     }
   }
 
+  function leapOffHandle() {
+    const h = attachedHandle;
+    attachedHandle = null;
+    // Strong leap — enough horizontal to clear ~70–90px handle gaps
+    player.vy = -640;
+    const dir = player.move !== 0 ? player.move : 1;
+    player.vx = dir * 340;
+    ignoreHandle = h;
+    ignoreHandleT = 0.45;
+    state = STATE.AIR;
+  }
+
   function tryFire() {
     if (state === STATE.ROPE_ATTACHED || state === STATE.ROPE_FLY) return;
     if (
@@ -274,9 +290,14 @@
     ) {
       return;
     }
+    // Leaving a handle (tap/Space) must leap — never silent-drop
+    if (state === STATE.HANDLE) {
+      leapOffHandle();
+    } else if (state === STATE.LADDER) {
+      attachedLadder = null;
+      player.vy = Math.min(player.vy, -220);
+    }
     if (NinjaRope.fire(rope, player)) {
-      if (state === STATE.HANDLE) attachedHandle = null;
-      if (state === STATE.LADDER) attachedLadder = null;
       state = STATE.ROPE_FLY;
     }
   }
@@ -288,12 +309,7 @@
       return;
     }
     if (state === STATE.HANDLE) {
-      attachedHandle = null;
-      // Stronger hang-leap so handle chains are reachable
-      player.vy = -540;
-      player.vx = player.move * 260;
-      if (player.move === 0) player.vx = 90; // slight forward pop if neutral
-      state = STATE.AIR;
+      leapOffHandle();
       return;
     }
     if (state === STATE.LADDER) {
@@ -344,6 +360,10 @@
 
     syncAim();
     if (rope.cooldown > 0) rope.cooldown -= dt;
+    if (ignoreHandleT > 0) {
+      ignoreHandleT -= dt;
+      if (ignoreHandleT <= 0) ignoreHandle = null;
+    }
     NinjaRope.tickFallGrace(player, dt);
 
     if (input.fire) {
