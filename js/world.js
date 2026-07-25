@@ -121,7 +121,7 @@
   /** ~10-handle hang chain with entry/exit pads; almost no rope targets. */
   function emitHandleRun(world, startX, groundY, H, rand) {
     const n = HANDLE_RUN_COUNT + Math.floor(rand() * 3); // 10–12
-    const spacing = 78 + rand() * 18;
+    const spacing = 68 + rand() * 12; // reachable with boosted hang-leap
     const entryW = 100 + rand() * 40;
     const baseY = groundY - 30 - rand() * (H * 0.18);
     let x = startX;
@@ -130,22 +130,23 @@
     // Ladder up onto the run (or to a higher ledge)
     if (rand() < 0.7) {
       const highY = baseY - 70 - rand() * 50;
-      world.platforms.push({ x: x + 8, y: highY, w: 70, h: 16 });
-      pushLadder(world, x + 28, highY, baseY + 50);
+      world.platforms.push({ x: x + 8, y: highY, w: 86, h: 16 });
+      pushLadder(world, x + 36, highY, baseY + 50);
     }
 
-    x += entryW + 30;
-    let hy = baseY - 20 - rand() * 40;
+    x += entryW + 24;
+    // First handle near entry jump height
+    let hy = baseY - 10 - rand() * 20;
     for (let i = 0; i < n; i++) {
-      hy += (rand() - 0.45) * 36;
-      hy = Math.max(groundY - H * 0.48, Math.min(groundY - 70, hy));
-      world.handles.push({ x: x + i * spacing, y: hy, r: 11 });
+      hy += (rand() - 0.5) * 22;
+      hy = Math.max(groundY - H * 0.42, Math.min(groundY - 80, hy));
+      world.handles.push({ x: x + i * spacing, y: hy, r: 12 });
       if (i % 3 === 1) pushCoin(world, x + i * spacing, hy - 28, rand);
     }
 
-    const endX = x + (n - 1) * spacing + 40;
-    const exitW = 90 + rand() * 50;
-    const exitY = hy + 40 + rand() * 30;
+    const endX = x + (n - 1) * spacing + 36;
+    const exitW = 100 + rand() * 40;
+    const exitY = hy + 28 + rand() * 20;
     world.platforms.push({ x: endX, y: exitY, w: exitW, h: 16 });
     // Sparse escape rope only near the exit
     if (rand() < 0.45) {
@@ -492,6 +493,25 @@
     return null;
   }
 
+  /** Find a platform near a world point (e.g. ladder top lip). */
+  function platformNear(world, x, y, xSlop, ySlop) {
+    xSlop = xSlop != null ? xSlop : 24;
+    ySlop = ySlop != null ? ySlop : 12;
+    let best = null;
+    let bestDist = Infinity;
+    for (const p of world.platforms) {
+      if (y < p.y - ySlop || y > p.y + p.h + ySlop) continue;
+      if (x < p.x - xSlop || x > p.x + p.w + xSlop) continue;
+      const cx = Math.max(p.x, Math.min(p.x + p.w, x));
+      const d = Math.abs(cx - x) + Math.abs(p.y - y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = p;
+      }
+    }
+    return best;
+  }
+
   function handleAt(world, x, y, reach) {
     for (const h of world.handles) {
       const dx = x - h.x;
@@ -538,6 +558,7 @@
     drawWorld,
     drawDangerVignette,
     platformAt,
+    platformNear,
     handleAt,
     ladderAt,
     targetHit,

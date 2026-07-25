@@ -289,19 +289,23 @@
     }
     if (state === STATE.HANDLE) {
       attachedHandle = null;
-      player.vy = -320;
+      // Stronger hang-leap so handle chains are reachable
+      player.vy = -540;
+      player.vx = player.move * 260;
+      if (player.move === 0) player.vx = 90; // slight forward pop if neutral
       state = STATE.AIR;
       return;
     }
     if (state === STATE.LADDER) {
       attachedLadder = null;
-      player.vy = -360;
-      player.vx = player.move * 120;
+      player.vy = -460;
+      player.vx = player.move * 160;
       state = STATE.AIR;
       return;
     }
     if (state === STATE.GROUND) {
-      player.vy = -420;
+      player.vy = -500;
+      player.vx += player.move * 40;
       state = STATE.AIR;
     }
   }
@@ -436,8 +440,8 @@
     ) {
       return;
     }
-    if (player.vy < -50) return; // only when falling / near
-    const h = NinjaWorld.handleAt(world, player.x, player.y - 8, 16);
+    if (player.vy < -80) return; // allow grab near apex / falling
+    const h = NinjaWorld.handleAt(world, player.x, player.y - 8, 22);
     if (h) {
       attachedHandle = h;
       attachedLadder = null;
@@ -485,35 +489,38 @@
     }
     player.x = l.x;
 
-    const climbSpeed = 165;
+    const climbSpeed = 180;
     if (rope.lengthInput !== 0) {
       player.y += rope.lengthInput * climbSpeed * dt;
     }
 
-    const topLimit = l.topY + 6;
+    // Standing height at ladder top (= feet on the upper platform)
+    const standY = l.topY - player.feet;
     const bottomLimit = l.bottomY - player.feet;
-    if (player.y <= topLimit) {
-      player.y = topLimit;
-      if (rope.lengthInput < 0) {
-        // Step off the top onto a platform if present
+
+    if (player.y <= standY + 3) {
+      player.y = standY;
+      // Mount the higher platform when climbing up (or already at the lip)
+      if (rope.lengthInput <= 0) {
+        const plat = NinjaWorld.platformNear(world, l.x, l.topY, l.w * 0.5 + 20, 14);
         attachedLadder = null;
-        player.vy = -140;
-        state = STATE.AIR;
-        resolvePlatformLanding();
-        if (state === STATE.AIR) {
-          const plat = NinjaWorld.platformAt(world, player.x, player.y, player.w, player.feet);
-          if (plat) {
-            player.y = plat.y - player.feet;
-            player.vy = 0;
-            state = STATE.GROUND;
-          }
+        player.vx = 0;
+        player.vy = 0;
+        if (plat) {
+          player.x = Math.max(plat.x + 10, Math.min(plat.x + plat.w - 10, l.x));
+          player.y = plat.y - player.feet;
+          state = STATE.GROUND;
+        } else {
+          state = STATE.AIR;
         }
+        return;
       }
     } else if (player.y >= bottomLimit) {
       player.y = bottomLimit;
       if (rope.lengthInput > 0) {
         attachedLadder = null;
         state = STATE.AIR;
+        return;
       }
     }
 
