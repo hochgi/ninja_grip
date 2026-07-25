@@ -3,6 +3,7 @@
     MENU: 'menu',
     GROUND: 'ground',
     HANDLE: 'handle',
+    LADDER: 'ladder',
     AIR: 'air',
     ROPE_FLY: 'rope_fly',
     ROPE_ATTACHED: 'rope_attached',
@@ -26,6 +27,7 @@
   let elapsed = 0;
   let runCoins = 0;
   let attachedHandle = null;
+  let attachedLadder = null;
   let touchPlay = false; // mobile/touch session: tilt + side taps
   let motionOn = false;
 
@@ -135,6 +137,7 @@
     player.move = 0;
     player.fallGrace = 0;
     attachedHandle = null;
+    attachedLadder = null;
     runCoins = 0;
     elapsed = 0;
     lastTime = 0;
@@ -263,11 +266,17 @@
 
   function tryFire() {
     if (state === STATE.ROPE_ATTACHED || state === STATE.ROPE_FLY) return;
-    if (state !== STATE.GROUND && state !== STATE.HANDLE && state !== STATE.AIR) return;
+    if (
+      state !== STATE.GROUND &&
+      state !== STATE.HANDLE &&
+      state !== STATE.LADDER &&
+      state !== STATE.AIR
+    ) {
+      return;
+    }
     if (NinjaRope.fire(rope, player)) {
-      if (state === STATE.HANDLE) {
-        attachedHandle = null;
-      }
+      if (state === STATE.HANDLE) attachedHandle = null;
+      if (state === STATE.LADDER) attachedLadder = null;
       state = STATE.ROPE_FLY;
     }
   }
@@ -281,6 +290,13 @@
     if (state === STATE.HANDLE) {
       attachedHandle = null;
       player.vy = -320;
+      state = STATE.AIR;
+      return;
+    }
+    if (state === STATE.LADDER) {
+      attachedLadder = null;
+      player.vy = -360;
+      player.vx = player.move * 120;
       state = STATE.AIR;
       return;
     }
@@ -364,6 +380,8 @@
       player.y = attachedHandle.y + 8;
       player.vx = 0;
       player.vy = 0;
+    } else if (state === STATE.LADDER && attachedLadder) {
+      updateLadderClimb(dt);
     } else {
       // GROUND or AIR
       if (state !== STATE.GROUND) {
@@ -380,6 +398,7 @@
       player.y += player.vy * dt;
       resolvePlatformLanding();
       tryGrabHandle();
+      tryGrabLadder();
     }
 
     collectCoins(dt);
@@ -392,7 +411,7 @@
   }
 
   function resolvePlatformLanding() {
-    if (state === STATE.ROPE_ATTACHED || state === STATE.HANDLE) return;
+    if (state === STATE.ROPE_ATTACHED || state === STATE.HANDLE || state === STATE.LADDER) return;
     if (player.vy < 0) return;
     const plat = NinjaWorld.platformAt(world, player.x, player.y, player.w, player.feet);
     if (plat) {
@@ -407,15 +426,97 @@
   }
 
   function tryGrabHandle() {
-    if (state === STATE.ROPE_ATTACHED || state === STATE.ROPE_FLY || state === STATE.HANDLE) return;
+    if (
+      state === STATE.ROPE_ATTACHED ||
+      state === STATE.ROPE_FLY ||
+      state === STATE.HANDLE ||
+      state === STATE.LADDER
+    ) {
+      return;
+    }
     if (player.vy < -50) return; // only when falling / near
     const h = NinjaWorld.handleAt(world, player.x, player.y - 8, 16);
     if (h) {
       attachedHandle = h;
+      attachedLadder = null;
       state = STATE.HANDLE;
       player.vx = 0;
       player.vy = 0;
     }
+  }
+
+  function tryGrabLadder() {
+    if (
+      state === STATE.ROPE_ATTACHED ||
+      state === STATE.ROPE_FLY ||
+      state === STATE.HANDLE ||
+      state === STATE.LADDER
+    ) {
+      return;
+    }
+    const l = NinjaWorld.ladderAt(world, player.x, player.y, player.w, player.feet);
+    if (!l) return;
+    // From ground: only mount when pressing up; from air: grab while falling/idle
+    if (state === STATE.GROUND && rope.lengthInput >= 0) return;
+    if (state === STATE.AIR && player.vy < -90) return;
+    attachedLadder = l;
+    attachedHandle = null;
+    state = STATE.LADDER;
+    player.x = l.x;
+    player.vx = 0;
+    player.vy = 0;
+  }
+
+  function updateLadderClimb(dt) {
+    const l = attachedLadder;
+    if (!l) {
+      state = STATE.AIR;
+      return;
+    }
+    // Stay on the ladder unless the player walks clearly off it
+    player.x = l.x + player.move * 6;
+    if (Math.abs(player.x - l.x) > l.w * 0.55 && Math.abs(player.move) > 0) {
+      attachedLadder = null;
+      player.vx = player.move * 140;
+      state = STATE.AIR;
+      return;
+    }
+    player.x = l.x;
+
+    const climbSpeed = 165;
+    if (rope.lengthInput !== 0) {
+      player.y += rope.lengthInput * climbSpeed * dt;
+    }
+
+    const topLimit = l.topY + 6;
+    const bottomLimit = l.bottomY - player.feet;
+    if (player.y <= topLimit) {
+      player.y = topLimit;
+      if (rope.lengthInput < 0) {
+        // Step off the top onto a platform if present
+        attachedLadder = null;
+        player.vy = -140;
+        state = STATE.AIR;
+        resolvePlatformLanding();
+        if (state === STATE.AIR) {
+          const plat = NinjaWorld.platformAt(world, player.x, player.y, player.w, player.feet);
+          if (plat) {
+            player.y = plat.y - player.feet;
+            player.vy = 0;
+            state = STATE.GROUND;
+          }
+        }
+      }
+    } else if (player.y >= bottomLimit) {
+      player.y = bottomLimit;
+      if (rope.lengthInput > 0) {
+        attachedLadder = null;
+        state = STATE.AIR;
+      }
+    }
+
+    player.vx = 0;
+    player.vy = 0;
   }
 
   function draw() {
@@ -425,6 +526,7 @@
     const canAim =
       state === STATE.GROUND ||
       state === STATE.HANDLE ||
+      state === STATE.LADDER ||
       state === STATE.AIR ||
       state === STATE.ROPE_FLY;
     if (canAim && state !== STATE.MENU && state !== STATE.OVER) {
@@ -437,7 +539,7 @@
     let pose = 'idle';
     let angle = 0;
     if (state === STATE.ROPE_ATTACHED) pose = 'rope';
-    if (state === STATE.HANDLE) pose = 'handle';
+    if (state === STATE.HANDLE || state === STATE.LADDER) pose = 'handle';
     if (state === STATE.AIR || state === STATE.ROPE_FLY) {
       angle = Math.atan2(player.vy, Math.abs(player.vx) + 1) * 0.15;
     }

@@ -23,9 +23,12 @@
   // Gradual regen whenever below full (skipped while currently gripped).
   const HEAL_RATE = 0.12; // ~8s empty → full
   const ATTACH_MIN = 0.2; // seconds of rope-time needed to latch again
-  // Occasional handle-run stretches (jump/hang parkour).
-  const PARKOUR_CHANCE = 0.16;
-  const PARKOUR_MIN_X = 700;
+  // Specialty set-pieces (handle-hang / platform-jump), spaced along the run.
+  const SPECIAL_FIRST_X = 650;
+  const SPECIAL_GAP_MIN = 780;
+  const SPECIAL_GAP_EXTRA = 620;
+  const HANDLE_RUN_COUNT = 10;
+  const LADDER_W = 26;
 
   function pickWeighted(rand, items, key) {
     key = key || 'weight';
@@ -61,10 +64,12 @@
       handles: [],
       targets: [],
       coins: [],
+      ladders: [],
       nextX: 0,
       seed: Math.random() * 1e9,
       elapsed: 0,
-      parkourRemain: 0,
+      nextSpecialAt: SPECIAL_FIRST_X,
+      specialIsHandles: true,
     };
   }
 
@@ -85,11 +90,98 @@
     world.handles = [];
     world.targets = [];
     world.coins = [];
+    world.ladders = [];
     world.nextX = 0;
     world.seed = Math.random() * 1e9;
     world.elapsed = 0;
-    world.parkourRemain = 0;
+    world.nextSpecialAt = SPECIAL_FIRST_X;
+    world.specialIsHandles = true;
     ensureChunks(world, H, 0, genAheadDist(W));
+  }
+
+  function pushCoin(world, x, y, rand) {
+    world.coins.push({
+      x,
+      y,
+      collected: false,
+      popLife: 0,
+      bob: rand() * Math.PI * 2,
+    });
+  }
+
+  function pushLadder(world, x, topY, bottomY) {
+    const top = Math.min(topY, bottomY);
+    const bottom = Math.max(topY, bottomY);
+    if (bottom - top < 60) return null;
+    const lad = { x, topY: top, bottomY: bottom, w: LADDER_W };
+    world.ladders.push(lad);
+    return lad;
+  }
+
+  /** ~10-handle hang chain with entry/exit pads; almost no rope targets. */
+  function emitHandleRun(world, startX, groundY, H, rand) {
+    const n = HANDLE_RUN_COUNT + Math.floor(rand() * 3); // 10–12
+    const spacing = 78 + rand() * 18;
+    const entryW = 100 + rand() * 40;
+    const baseY = groundY - 30 - rand() * (H * 0.18);
+    let x = startX;
+
+    world.platforms.push({ x, y: baseY + 50, w: entryW, h: 16 });
+    // Ladder up onto the run (or to a higher ledge)
+    if (rand() < 0.7) {
+      const highY = baseY - 70 - rand() * 50;
+      world.platforms.push({ x: x + 8, y: highY, w: 70, h: 16 });
+      pushLadder(world, x + 28, highY, baseY + 50);
+    }
+
+    x += entryW + 30;
+    let hy = baseY - 20 - rand() * 40;
+    for (let i = 0; i < n; i++) {
+      hy += (rand() - 0.45) * 36;
+      hy = Math.max(groundY - H * 0.48, Math.min(groundY - 70, hy));
+      world.handles.push({ x: x + i * spacing, y: hy, r: 11 });
+      if (i % 3 === 1) pushCoin(world, x + i * spacing, hy - 28, rand);
+    }
+
+    const endX = x + (n - 1) * spacing + 40;
+    const exitW = 90 + rand() * 50;
+    const exitY = hy + 40 + rand() * 30;
+    world.platforms.push({ x: endX, y: exitY, w: exitW, h: 16 });
+    // Sparse escape rope only near the exit
+    if (rand() < 0.45) {
+      world.targets.push(makeTarget(endX + exitW * 0.5, exitY - 120 - rand() * 40, rand));
+    }
+    return endX + exitW + 80;
+  }
+
+  /** Platform-jump gauntlet: gaps, no rope, rare handles. */
+  function emitPlatformRun(world, startX, groundY, H, rand) {
+    const n = 7 + Math.floor(rand() * 3); // 7–9 pads
+    let x = startX;
+    let platY = groundY - 20 - rand() * (H * 0.2);
+    let prevY = platY;
+
+    for (let i = 0; i < n; i++) {
+      const pw = 72 + rand() * 48;
+      platY = prevY + (rand() - 0.5) * 70;
+      platY = Math.max(groundY - H * 0.42, Math.min(groundY - 40, platY));
+      world.platforms.push({ x, y: platY, w: pw, h: 16 });
+      if (rand() < 0.55) pushCoin(world, x + pw * 0.5, platY - 34, rand);
+
+      // Mid-run ladder to a higher ledge once
+      if (i === Math.floor(n / 2) && rand() < 0.65) {
+        const highY = platY - 90 - rand() * 40;
+        const lx = x + pw * 0.35;
+        world.platforms.push({ x: lx - 20, y: highY, w: 80, h: 16 });
+        pushLadder(world, lx, highY, platY);
+        pushCoin(world, lx + 20, highY - 30, rand);
+      }
+
+      const gap = 88 + rand() * 42;
+      x += pw + gap;
+      prevY = platY;
+    }
+    return x + 40;
   }
 
   /**
@@ -110,46 +202,14 @@
         continue;
       }
 
-      // Start a short handle-run (few/no platforms) every so often.
-      if (world.parkourRemain <= 0 && x > PARKOUR_MIN_X && rand() < PARKOUR_CHANCE) {
-        world.parkourRemain = 2 + Math.floor(rand() * 3); // 2–4 segments
-      }
-
-      if (world.parkourRemain > 0) {
-        world.parkourRemain -= 1;
-        const span = 150 + rand() * 110;
-        const baseY = groundY - 50 - rand() * (H * 0.28);
-        const nHandles = 2 + (rand() < 0.55 ? 1 : 0);
-        for (let i = 0; i < nHandles; i++) {
-          const t = (i + 0.5) / nHandles;
-          const hx = x + 24 + t * (span - 48) + (rand() - 0.5) * 18;
-          const hy = baseY - 40 - rand() * 90 + (i % 2) * 28;
-          world.handles.push({ x: hx, y: hy, r: 11 });
-        }
-        // Occasional landing pad so the stretch isn't pure free-fall
-        if (rand() < 0.38) {
-          const pw = 64 + rand() * 56;
-          world.platforms.push({
-            x: x + span * (0.25 + rand() * 0.35),
-            y: baseY + 20 + rand() * 40,
-            w: pw,
-            h: 16,
-          });
-        }
-        // Sparse escape targets — parkour is the main verb here
-        if (rand() < 0.28) {
-          world.targets.push(makeTarget(x + span * 0.55, baseY - 110 - rand() * 60, rand));
-        }
-        if (rand() < 0.6) {
-          world.coins.push({
-            x: x + span * 0.5,
-            y: baseY - 30,
-            collected: false,
-            popLife: 0,
-            bob: rand() * Math.PI * 2,
-          });
-        }
-        world.nextX = x + span;
+      // Guaranteed specialty stretches, alternating hang-run ↔ platform-jump.
+      if (x >= world.nextSpecialAt) {
+        const endX = world.specialIsHandles
+          ? emitHandleRun(world, x, groundY, H, rand)
+          : emitPlatformRun(world, x, groundY, H, rand);
+        world.specialIsHandles = !world.specialIsHandles;
+        world.nextSpecialAt = endX + SPECIAL_GAP_MIN + rand() * SPECIAL_GAP_EXTRA;
+        world.nextX = endX;
         continue;
       }
 
@@ -163,6 +223,20 @@
         world.handles.push({ x: hx, y: platY - 70 - rand() * 50, r: 11 });
       }
 
+      // Occasional ladder to a higher perch in normal chunks
+      if (rand() < 0.22) {
+        const highY = platY - 100 - rand() * 60;
+        const lx = x + 30 + rand() * Math.max(20, platW - 40);
+        world.platforms.push({ x: lx - 24, y: highY, w: 72 + rand() * 40, h: 16 });
+        pushLadder(world, lx, highY, platY);
+        if (rand() < 0.5) {
+          world.handles.push({ x: lx + 10, y: highY - 55 - rand() * 30, r: 11 });
+        }
+        if (rand() < 0.4) {
+          world.targets.push(makeTarget(lx + 20, highY - 100 - rand() * 40, rand));
+        }
+      }
+
       const nTargets = 1 + (rand() < 0.45 ? 1 : 0);
       for (let i = 0; i < nTargets; i++) {
         const tx = x + 30 + rand() * (platW + 80);
@@ -171,13 +245,7 @@
       }
 
       if (rand() < 0.7) {
-        world.coins.push({
-          x: x + platW * 0.5,
-          y: platY - 36,
-          collected: false,
-          popLife: 0,
-          bob: rand() * Math.PI * 2,
-        });
+        pushCoin(world, x + platW * 0.5, platY - 36, rand);
       }
 
       if (rand() < 0.4) {
@@ -192,6 +260,7 @@
     world.handles = world.handles.filter((h) => h.x > minX);
     world.targets = world.targets.filter((t) => t.x > minX && !t.removed);
     world.coins = world.coins.filter((c) => c.x > minX && (!c.collected || c.popLife > 0));
+    world.ladders = world.ladders.filter((l) => l.x + l.w > minX);
   }
 
   function makeTarget(x, y, rand) {
@@ -296,6 +365,30 @@
       ctx.fillRect(sx, p.y, p.w, p.h);
       ctx.fillStyle = '#d8a23a';
       ctx.fillRect(sx, p.y, p.w, 3);
+    }
+
+    for (const l of world.ladders) {
+      const sx = worldToScreen(world, l.x - l.w / 2);
+      if (sx + l.w < -20 || sx > W + 20) continue;
+      const h = l.bottomY - l.topY;
+      ctx.fillStyle = '#5a4834';
+      ctx.fillRect(sx, l.topY, l.w, h);
+      ctx.strokeStyle = '#c4a46a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(sx + 3, l.topY);
+      ctx.lineTo(sx + 3, l.bottomY);
+      ctx.moveTo(sx + l.w - 3, l.topY);
+      ctx.lineTo(sx + l.w - 3, l.bottomY);
+      ctx.stroke();
+      ctx.strokeStyle = '#a88858';
+      ctx.lineWidth = 2;
+      for (let y = l.topY + 10; y < l.bottomY - 4; y += 14) {
+        ctx.beginPath();
+        ctx.moveTo(sx + 2, y);
+        ctx.lineTo(sx + l.w - 2, y);
+        ctx.stroke();
+      }
     }
 
     for (const h of world.handles) {
@@ -408,6 +501,18 @@
     return null;
   }
 
+  /** Body overlap with a ladder (x centered, vertical span). */
+  function ladderAt(world, x, y, hw, hh) {
+    const feet = y + hh;
+    const head = y - hh * 0.6;
+    for (const l of world.ladders) {
+      if (x + hw < l.x - l.w / 2 || x - hw > l.x + l.w / 2) continue;
+      if (feet < l.topY - 6 || head > l.bottomY + 6) continue;
+      return l;
+    }
+    return null;
+  }
+
   function targetHit(world, x, y) {
     for (const t of world.targets) {
       if (!targetUsable(t)) continue;
@@ -434,6 +539,7 @@
     drawDangerVignette,
     platformAt,
     handleAt,
+    ladderAt,
     targetHit,
     ensureChunks,
   };
