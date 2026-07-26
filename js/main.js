@@ -271,12 +271,12 @@
   function leapOffHandle() {
     const h = attachedHandle;
     attachedHandle = null;
-    // Strong leap — enough horizontal to clear ~70–90px handle gaps
-    player.vy = -640;
+    // Modest leap — reach the next handle (~70–80px), not skip two
+    player.vy = -450;
     const dir = player.move !== 0 ? player.move : 1;
-    player.vx = dir * 340;
+    player.vx = dir * 145;
     ignoreHandle = h;
-    ignoreHandleT = 0.45;
+    ignoreHandleT = 0.28;
     state = STATE.AIR;
   }
 
@@ -460,15 +460,14 @@
     ) {
       return;
     }
-    if (player.vy < -80) return; // allow grab near apex / falling
+    if (player.vy < -120) return; // still rising hard — wait for apex
     const h = NinjaWorld.handleAt(world, player.x, player.y - 8, 22);
-    if (h) {
-      attachedHandle = h;
-      attachedLadder = null;
-      state = STATE.HANDLE;
-      player.vx = 0;
-      player.vy = 0;
-    }
+    if (!h || (ignoreHandleT > 0 && h === ignoreHandle)) return;
+    attachedHandle = h;
+    attachedLadder = null;
+    state = STATE.HANDLE;
+    player.vx = 0;
+    player.vy = 0;
   }
 
   function tryGrabLadder() {
