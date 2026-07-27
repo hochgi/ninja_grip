@@ -21,7 +21,10 @@ Optional local static server is fine for development, but **not required**.
 
 ## Dev autopilot (testing)
 
-Unlock cheats with `?dev=1` on the URL (e.g. `index.html?dev=1`), or type **`pilot`** with the game focused. A **AUTO / MANUAL** toggle appears near the pause button — use it to watch long runs / hard sections without playing them yourself.
+Unlock cheats with `?dev=1` on the URL (e.g. `index.html?dev=1`), or type **`pilot`** with the game focused. Buttons near pause:
+
+- **AUTO / MANUAL** — toggle autopilot
+- **LOG** — copy the session JSON to the clipboard and download a `.json` file (state changes, 0.5s samples, deaths). Paste that here to review hard sections.
 
 ## Language
 
