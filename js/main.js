@@ -238,6 +238,12 @@
     document.getElementById('bestScoreRow').innerHTML = NinjaI18n.t('gameOver.best', {
       value: NinjaSkins.bestDistance,
     });
+    const goLog = document.getElementById('gameOverLogBtn');
+    if (goLog) {
+      const showLog = !!(window.NinjaAutopilot && NinjaAutopilot.isUnlocked());
+      goLog.classList.toggle('hidden', !showLog);
+      if (showLog) goLog.textContent = NinjaI18n.t('gameOver.copyLog');
+    }
     show(document.getElementById('gameOverOverlay'), true);
     showPauseBtn(false);
     showControls(false);
@@ -893,6 +899,13 @@
   function wireUi() {
     document.getElementById('playBtn').addEventListener('click', startGame);
     document.getElementById('retryBtn').addEventListener('click', startGame);
+    const goLogBtn = document.getElementById('gameOverLogBtn');
+    if (goLogBtn) {
+      goLogBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (window.NinjaAutopilot) NinjaAutopilot.copyLog();
+      });
+    }
     document.getElementById('pauseBtn').addEventListener('click', togglePause);
     document.getElementById('resumeBtn').addEventListener('click', resumeFromPause);
     document.getElementById('quitBtn').addEventListener('click', () => {

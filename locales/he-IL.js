@@ -24,7 +24,8 @@ window.NINJA_LOCALES['he-IL'] = {
   "gameOver": {
     "quote": "הנינג'ה נפל",
     "best": "השיא שלך: <b>{{value}}</b> מטרים",
-    "retry": "חזרה לדוג'ו 🥋"
+    "retry": "חזרה לדוג'ו 🥋",
+    "copyLog": "העתק לוג סשן"
   },
   "help": {
     "subtitle": "מדריך הנינג'ה",

@@ -24,7 +24,8 @@ window.NINJA_LOCALES['en-US'] = {
   "gameOver": {
     "quote": "The ninja fell",
     "best": "Your best: <b>{{value}}</b> meters",
-    "retry": "Back to the dojo 🥋"
+    "retry": "Back to the dojo 🥋",
+    "copyLog": "Copy session log"
   },
   "help": {
     "subtitle": "Ninja guide",

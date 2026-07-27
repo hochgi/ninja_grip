@@ -355,7 +355,7 @@ canvas#gameCanvas {
   position: absolute;
   top: 14px;
   left: calc(50% + 58px);
-  z-index: 16;
+  z-index: 40;
   background: rgba(20, 17, 14, 0.85);
   border: 2px solid #7a8a9a;
   border-radius: 10px;
@@ -382,7 +382,7 @@ canvas#gameCanvas {
   position: absolute;
   top: 14px;
   left: calc(50% + 128px);
-  z-index: 16;
+  z-index: 40;
   background: rgba(20, 17, 14, 0.85);
   border: 2px solid #7a8a9a;
   border-radius: 10px;
