@@ -166,6 +166,13 @@
   function startGame() {
     resetRun();
     state = STATE.GROUND;
+    if (window.NinjaAutopilot) {
+      NinjaAutopilot.beginRun({
+        W,
+        H,
+        touchPlay: !!(window.NinjaMotion && NinjaMotion.prefersTouch()),
+      });
+    }
     show(document.getElementById('menuOverlay'), false);
     show(document.getElementById('gameOverOverlay'), false);
     show(document.getElementById('pauseOverlay'), false);
@@ -204,6 +211,20 @@
 
   function gameOver() {
     if (state === STATE.OVER) return;
+    if (window.NinjaAutopilot) {
+      NinjaAutopilot.endRun({
+        dist: Math.floor(world.distance),
+        x: Math.round(player.x),
+        y: Math.round(player.y),
+        sx: Math.round(player.x - world.cameraX),
+        reason:
+          world.scrollUnlocked && player.x - world.cameraX < -player.w
+            ? 'left_edge'
+            : player.y - player.feet > H + 10
+              ? 'fell'
+              : 'unknown',
+      });
+    }
     state = STATE.OVER;
     if (window.NinjaMotion) NinjaMotion.disable();
     motionOn = false;
@@ -358,8 +379,8 @@
       }
     }
 
-    if (window.NinjaAutopilot && NinjaAutopilot.isActive()) {
-      NinjaAutopilot.tick({
+    if (window.NinjaAutopilot && NinjaAutopilot.isUnlocked()) {
+      const autoCtx = {
         state,
         player,
         world,
@@ -369,11 +390,15 @@
         input,
         attachedHandle,
         dt,
-      });
-      player.move = input.move;
-      if (input.shorten) rope.lengthInput = -1;
-      else if (input.lengthen) rope.lengthInput = 1;
-      else rope.lengthInput = 0;
+      };
+      NinjaAutopilot.sample(autoCtx, dt);
+      if (NinjaAutopilot.isActive()) {
+        NinjaAutopilot.tick(autoCtx);
+        player.move = input.move;
+        if (input.shorten) rope.lengthInput = -1;
+        else if (input.lengthen) rope.lengthInput = 1;
+        else rope.lengthInput = 0;
+      }
     }
 
     syncAim();
@@ -880,6 +905,13 @@
       autoBtn.addEventListener('click', (e) => {
         e.preventDefault();
         if (window.NinjaAutopilot) NinjaAutopilot.toggle();
+      });
+    }
+    const logBtn = document.getElementById('autopilotLogBtn');
+    if (logBtn) {
+      logBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (window.NinjaAutopilot) NinjaAutopilot.copyLog();
       });
     }
     document.getElementById('openSkinsBtn').addEventListener('click', () => {

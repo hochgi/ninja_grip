@@ -378,6 +378,27 @@ canvas#gameCanvas {
   display: none;
 }
 
+#autopilotLogBtn {
+  position: absolute;
+  top: 14px;
+  left: calc(50% + 128px);
+  z-index: 16;
+  background: rgba(20, 17, 14, 0.85);
+  border: 2px solid #7a8a9a;
+  border-radius: 10px;
+  color: #c8d0d8;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 8px 10px;
+  cursor: pointer;
+  pointer-events: all;
+}
+
+#autopilotLogBtn.hidden {
+  display: none;
+}
+
 #langToggle {
   position: absolute;
   top: 14px;

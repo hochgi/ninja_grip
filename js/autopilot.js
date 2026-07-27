@@ -5,12 +5,17 @@
  */
 (function (global) {
   const STORAGE_KEY = 'ninjaGripDevUnlock';
+  const LOG_MAX = 2500;
   let unlocked = false;
   let active = false;
   let buffer = '';
   let bufferT = 0;
   let leapCooldown = 0;
   let fireCooldown = 0;
+  let log = [];
+  let lastState = '';
+  let sampleAcc = 0;
+  let runId = 0;
 
   function fromQuery() {
     try {
@@ -54,6 +59,7 @@
     active = !!on;
     leapCooldown = 0;
     fireCooldown = 0;
+    pushLog(active ? 'auto_on' : 'auto_off', {});
     syncButton();
   }
 
@@ -64,11 +70,133 @@
 
   function syncButton() {
     const btn = document.getElementById('autopilotBtn');
-    if (!btn) return;
-    btn.classList.toggle('hidden', !unlocked);
-    btn.classList.toggle('on', active);
-    btn.textContent = active ? 'AUTO' : 'MANUAL';
-    btn.title = active ? 'Autopilot on — click for manual' : 'Manual — click for autopilot';
+    if (btn) {
+      btn.classList.toggle('hidden', !unlocked);
+      btn.classList.toggle('on', active);
+      btn.textContent = active ? 'AUTO' : 'MANUAL';
+      btn.title = active ? 'Autopilot on — click for manual' : 'Manual — click for autopilot';
+    }
+    const logBtn = document.getElementById('autopilotLogBtn');
+    if (logBtn) {
+      logBtn.classList.toggle('hidden', !unlocked);
+      logBtn.title = 'Copy session log to clipboard (also downloads .json)';
+    }
+  }
+
+  function pushLog(type, data) {
+    if (!unlocked) return;
+    log.push({
+      t: Date.now(),
+      run: runId,
+      type,
+      auto: active,
+      ...(data || {}),
+    });
+    if (log.length > LOG_MAX) log.splice(0, log.length - LOG_MAX);
+  }
+
+  function beginRun(meta) {
+    runId += 1;
+    lastState = '';
+    sampleAcc = 0;
+    pushLog('run_start', meta || {});
+  }
+
+  function endRun(meta) {
+    pushLog('run_end', meta || {});
+  }
+
+  function note(type, data) {
+    pushLog(type, data);
+  }
+
+  /** Periodic + state-change samples while unlocked (manual or auto). */
+  function sample(ctx, dt) {
+    if (!unlocked) return;
+    const { state, player, world, W, H } = ctx;
+    if (state && state !== lastState) {
+      pushLog('state', {
+        from: lastState || null,
+        to: state,
+        x: Math.round(player.x),
+        y: Math.round(player.y),
+        dist: Math.round(world.distance),
+        sx: Math.round(player.x - world.cameraX),
+      });
+      lastState = state;
+    }
+    sampleAcc += dt || 0;
+    if (sampleAcc < 0.5) return;
+    sampleAcc = 0;
+    const sx = player.x - world.cameraX;
+    pushLog('sample', {
+      state,
+      x: Math.round(player.x),
+      y: Math.round(player.y),
+      vx: Math.round(player.vx),
+      vy: Math.round(player.vy),
+      dist: Math.round(world.distance),
+      cam: Math.round(world.cameraX),
+      sx: Math.round(sx),
+      W,
+      H,
+      scroll: !!world.scrollUnlocked,
+      handles: world.handles.length,
+      plats: world.platforms.length,
+      targets: world.targets.filter((t) => t.durability > 0.2).length,
+      ladders: world.ladders.length,
+    });
+  }
+
+  function getLog() {
+    return {
+      version: 1,
+      unlocked,
+      active,
+      runId,
+      exportedAt: new Date().toISOString(),
+      ua: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+      events: log.slice(),
+    };
+  }
+
+  function formatLogText() {
+    const payload = getLog();
+    return JSON.stringify(payload, null, 2);
+  }
+
+  function downloadLog() {
+    const text = formatLogText();
+    const blob = new Blob([text], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ninja-grip-session-${runId || 0}-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return text;
+  }
+
+  async function copyLog() {
+    const text = formatLogText();
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      }
+    } catch (_) {}
+    downloadLog();
+    pushLog('log_export', { events: log.length });
+    const logBtn = document.getElementById('autopilotLogBtn');
+    if (logBtn) {
+      const prev = logBtn.textContent;
+      logBtn.textContent = 'COPIED';
+      setTimeout(() => {
+        logBtn.textContent = prev;
+      }, 1200);
+    }
+    return text;
   }
 
   /** Eat keystrokes for the "pilot" cheat (call from keydown). */
@@ -83,6 +211,7 @@
       buffer = '';
       unlock();
       setActive(true);
+      pushLog('cheat_unlock', { via: 'pilot' });
     }
   }
 
@@ -255,9 +384,11 @@
         aimAt(input, player, world, t.x, t.y);
         input.fire = true;
         fireCooldown = 0.45;
+        pushLog('auto_fire', { reason: 'gap', tx: Math.round(t.x), ty: Math.round(t.y) });
       } else {
         input.detach = true;
         leapCooldown = 0.3;
+        pushLog('auto_jump', { reason: 'gap' });
       }
       return;
     }
@@ -291,6 +422,13 @@
     toggle,
     onKey,
     tick,
+    sample,
+    beginRun,
+    endRun,
+    note,
+    getLog,
+    copyLog,
+    downloadLog,
     syncButton,
   };
 })(window);
