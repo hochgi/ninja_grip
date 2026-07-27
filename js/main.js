@@ -350,12 +350,30 @@
     if (input.lengthen || keys['s'] || keys['e'] || keys['arrowdown']) rope.lengthInput = 1;
 
     // Android-first tilt overrides when motion is live
-    if (motionOn && window.NinjaMotion) {
+    if (motionOn && window.NinjaMotion && !(window.NinjaAutopilot && NinjaAutopilot.isActive())) {
       const m = NinjaMotion.sample();
       if (m.fresh) {
         if (Math.abs(m.move) > 0.35) player.move = Math.sign(m.move);
         if (m.lengthInput) rope.lengthInput = m.lengthInput;
       }
+    }
+
+    if (window.NinjaAutopilot && NinjaAutopilot.isActive()) {
+      NinjaAutopilot.tick({
+        state,
+        player,
+        world,
+        rope,
+        W,
+        H,
+        input,
+        attachedHandle,
+        dt,
+      });
+      player.move = input.move;
+      if (input.shorten) rope.lengthInput = -1;
+      else if (input.lengthen) rope.lengthInput = 1;
+      else rope.lengthInput = 0;
     }
 
     syncAim();
@@ -740,16 +758,17 @@
 
     window.addEventListener('keydown', (e) => {
       keys[e.key.toLowerCase()] = true;
+      if (window.NinjaAutopilot) NinjaAutopilot.onKey(e);
       const playable = isPlayable();
       const hsOpen = document.getElementById('hideSeekScreen').style.display === 'block';
       const battleOpen = !document.getElementById('battleOverlay').classList.contains('hidden');
       if (e.code === 'Space') {
         e.preventDefault();
-        if (playable) input.fire = true;
+        if (playable && !(window.NinjaAutopilot && NinjaAutopilot.isActive())) input.fire = true;
       }
       if (e.key === 'Shift') {
         e.preventDefault();
-        if (playable) input.detach = true;
+        if (playable && !(window.NinjaAutopilot && NinjaAutopilot.isActive())) input.detach = true;
       }
       if (e.key === 'Escape' && !hsOpen && !battleOpen) togglePause();
     });
@@ -856,6 +875,13 @@
       goMenu();
     });
     document.getElementById('langToggle').addEventListener('click', () => NinjaI18n.toggleLanguage());
+    const autoBtn = document.getElementById('autopilotBtn');
+    if (autoBtn) {
+      autoBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (window.NinjaAutopilot) NinjaAutopilot.toggle();
+      });
+    }
     document.getElementById('openSkinsBtn').addEventListener('click', () => {
       if (state !== STATE.MENU && state !== STATE.OVER && state !== STATE.PAUSED) {
         stateBeforePause = state;
@@ -953,6 +979,7 @@
     refreshHudLabels();
     setupControls();
     wireUi();
+    if (window.NinjaAutopilot) NinjaAutopilot.init();
     NinjaWorld.resetWorld(world, H, W);
     goMenu();
     draw();
