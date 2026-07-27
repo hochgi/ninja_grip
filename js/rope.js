@@ -159,7 +159,7 @@
     rope.cooldown = 0;
   }
 
-  function updateAttached(rope, player, dt) {
+  function updateAttached(rope, player, dt, world) {
     const a = rope.attached;
     if (!a || !a.target) {
       rope.attached = null;
@@ -167,6 +167,70 @@
     }
 
     const maxOmega = a.maxOmega != null ? a.maxOmega : MAX_OMEGA_BASE;
+    const feet = player.feet != null ? player.feet : 24;
+    const hw = player.w || 12;
+
+    // Standing on a platform with rope live: walk + length, no pendulum dig-in
+    if (a.onPlatform && world && global.NinjaWorld) {
+      if (player.move) {
+        player.x += player.move * 160 * dt;
+      }
+      if (rope.lengthInput !== 0) {
+        // Shorten pulls toward the anchor (may lift off); lengthen slackens in place
+        if (rope.lengthInput < 0) {
+          const pull = 140 * dt;
+          const dx = a.target.x - player.x;
+          const dy = a.target.y - player.y;
+          const dist = Math.hypot(dx, dy) || 1;
+          player.x += (dx / dist) * pull;
+          player.y += (dy / dist) * pull;
+        } else {
+          a.length = Math.min(ROPE_MAX_LEN, a.length + 140 * dt);
+        }
+      }
+
+      let plat = global.NinjaWorld.platformAt(world, player.x, player.y, hw, feet);
+      if (plat) {
+        player.y = plat.y - feet;
+        let dx = player.x - a.target.x;
+        let dy = player.y - a.target.y;
+        let length = Math.hypot(dx, dy);
+        if (length > ROPE_MAX_LEN && length > 0) {
+          const k = ROPE_MAX_LEN / length;
+          player.x = a.target.x + dx * k;
+          plat = global.NinjaWorld.platformAt(world, player.x, player.y, hw, feet);
+          if (plat) player.y = plat.y - feet;
+          dx = player.x - a.target.x;
+          dy = player.y - a.target.y;
+          length = Math.hypot(dx, dy);
+        }
+        if (plat && length >= ROPE_MIN_LEN - 2) {
+          a.length = Math.max(ROPE_MIN_LEN, Math.min(ROPE_MAX_LEN, length));
+          a.angle = Math.atan2(dx, dy);
+          a.omega = 0;
+          a.onPlatform = true;
+          a.target.durability -= dt;
+          if (a.target.durability <= 0) {
+            a.target.durability = 0;
+            beginSnapFall(rope, player, a.angle, a.omega, a.length, a.maxFling);
+          }
+          return;
+        }
+        // Shortened enough to lift off the floor — resume swing
+        a.onPlatform = false;
+        a.length = Math.max(ROPE_MIN_LEN, Math.min(ROPE_MAX_LEN, length));
+        a.angle = Math.atan2(dx, dy);
+        a.omega = 0;
+      } else {
+        // Walked off the lip — swing from current pose
+        a.onPlatform = false;
+        const dx = player.x - a.target.x;
+        const dy = player.y - a.target.y;
+        a.length = Math.max(ROPE_MIN_LEN, Math.min(ROPE_MAX_LEN, Math.hypot(dx, dy)));
+        a.angle = Math.atan2(dx, dy);
+        a.omega = player.move * 1.2;
+      }
+    }
 
     // Length change — shortening spins you up, but still within this target's omega cap
     if (rope.lengthInput !== 0) {
@@ -180,7 +244,6 @@
     }
 
     // Pendulum: alpha = -(g/L) sin(theta) + input torque
-    // While standing on a platform with rope live, only allow lift-off torque (no dig-in).
     const input = player.move * SWING_INPUT;
     const alpha = -(GRAVITY / a.length) * Math.sin(a.angle) + input;
     a.omega += alpha * dt;

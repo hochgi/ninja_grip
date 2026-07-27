@@ -24,11 +24,12 @@
   const HEAL_RATE = 0.12; // ~8s empty → full
   const ATTACH_MIN = 0.2; // seconds of rope-time needed to latch again
   // Specialty set-pieces (handle-hang / platform-jump), spaced along the run.
-  const SPECIAL_FIRST_X = 650;
+  const SPECIAL_FIRST_X = 1400; // give a soft runway before set-pieces
   const SPECIAL_GAP_MIN = 780;
   const SPECIAL_GAP_EXTRA = 620;
   const HANDLE_RUN_COUNT = 10;
   const LADDER_W = 26;
+  const EASY_UNTIL_X = 900; // tighter gaps / longer pads early
 
   function pickWeighted(rand, items, key) {
     key = key || 'weight';
@@ -196,10 +197,12 @@
     while (world.nextX < limit) {
       const x = world.nextX;
       if (x === 0) {
-        world.platforms.push({ x: 40, y: groundY, w: 220, h: 18 });
-        world.targets.push(makeTarget(180, groundY - 160, rand));
-        world.handles.push({ x: 280, y: groundY - 90, r: 12 });
-        world.nextX = 320;
+        // Long starter runway so the opening isn't a free-fall
+        world.platforms.push({ x: 40, y: groundY, w: 340, h: 18 });
+        world.platforms.push({ x: 420, y: groundY - 10, w: 160, h: 16 });
+        world.targets.push(makeTarget(220, groundY - 150, rand));
+        world.handles.push({ x: 500, y: groundY - 95, r: 12 });
+        world.nextX = 620;
         continue;
       }
 
@@ -214,9 +217,12 @@
         continue;
       }
 
-      const gap = 140 + rand() * 120;
-      const platW = 90 + rand() * 140;
-      const platY = groundY - rand() * (H * 0.35);
+      const easy = x < EASY_UNTIL_X;
+      const gap = easy ? 70 + rand() * 50 : 140 + rand() * 120;
+      const platW = easy ? 120 + rand() * 100 : 90 + rand() * 140;
+      const platY = easy
+        ? groundY - rand() * (H * 0.12)
+        : groundY - rand() * (H * 0.35);
       world.platforms.push({ x: x + 20, y: platY, w: platW, h: 16 });
 
       if (rand() < 0.55) {

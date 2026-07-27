@@ -439,12 +439,26 @@
       if (hit) {
         NinjaRope.attachTo(rope, player, hit);
         state = STATE.ROPE_ATTACHED;
+        // Already standing? start in walk-on-platform mode
+        const plat = NinjaWorld.platformAt(world, player.x, player.y, player.w, player.feet);
+        if (plat && rope.attached) {
+          player.y = plat.y - player.feet;
+          const dx = player.x - hit.x;
+          const dy = player.y - hit.y;
+          rope.attached.length = Math.max(
+            NinjaRope.ROPE_MIN_LEN,
+            Math.min(NinjaRope.ROPE_MAX_LEN, Math.hypot(dx, dy))
+          );
+          rope.attached.angle = Math.atan2(dx, dy);
+          rope.attached.omega = 0;
+          rope.attached.onPlatform = true;
+        }
       } else if (!rope.projectile) {
         state = STATE.AIR;
       }
     } else if (state === STATE.ROPE_ATTACHED) {
       const prevY = player.y;
-      NinjaRope.updateAttached(rope, player, dt);
+      NinjaRope.updateAttached(rope, player, dt, world);
       if (rope.attached) {
         NinjaRope.resolveAttachedPlatform(rope, player, world, prevY, player.feet);
       } else {

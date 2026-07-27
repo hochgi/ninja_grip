@@ -299,6 +299,33 @@
     input.aiming = true;
   }
 
+  function nextPlatform(world, player) {
+    let best = null;
+    let bestDx = Infinity;
+    for (const p of world.platforms) {
+      const dx = p.x - player.x;
+      if (dx < 10 || dx > 220) continue;
+      if (Math.abs(p.y - (player.y + player.feet)) > 110) continue;
+      if (dx < bestDx) {
+        bestDx = dx;
+        best = p;
+      }
+    }
+    return best;
+  }
+
+  function hasLandingAhead(world, player, minX, maxX) {
+    for (const p of world.platforms) {
+      if (p.x + p.w < minX || p.x > maxX) continue;
+      if (Math.abs(p.y - (player.y + (player.feet || 24))) < 120) return true;
+    }
+    for (const h of world.handles) {
+      if (h.x < minX || h.x > maxX) continue;
+      if (Math.abs(h.y - player.y) < 100) return true;
+    }
+    return false;
+  }
+
   /**
    * Overwrite input for this frame. Call after human/tilt sampling.
    * ctx: { state, player, world, rope, W, H, input, attachedHandle, dt }
@@ -308,43 +335,77 @@
     const { state, player, world, rope, W, input, attachedHandle, dt } = ctx;
     tickTimers(dt || 0);
 
-    // Reset continuous axes; one-shots cleared by main after consume
     input.move = 0;
     input.shorten = false;
     input.lengthen = false;
 
+    const H = ctx.H || 600;
     const sx = player.x - world.cameraX;
     const dangerLeft = world.scrollUnlocked && sx < W * 0.28;
-    const preferRight = !world.scrollUnlocked || sx < W * 0.58 || dangerLeft;
+    const preferRight = !world.scrollUnlocked || sx < W * 0.6 || dangerLeft;
 
     if (state === 'rope_attached' && rope.attached) {
       const a = rope.attached;
+      // Standing with live rope: walk right, only leave when near lip or must bail
+      if (a.onPlatform) {
+        input.move = 1;
+        const plat = platformUnder(world, player.x, player.y, player.feet);
+        const nearEdge = plat && player.x > plat.x + plat.w - 42;
+        const mustBail = a.target.durability < 1.2 || dangerLeft;
+        if (nearEdge || mustBail) {
+          // Prefer walking onto next pad / swinging off rather than blind detach
+          const np = nextPlatform(world, player);
+          const nh = nextHandle(world, player, null);
+          if (np && np.x - player.x < 100 && leapCooldown <= 0) {
+            // walk off into short hop — detach with rightward intent
+            input.detach = true;
+            leapCooldown = 0.35;
+            pushLog('auto_detach', { reason: 'plat_edge_walk' });
+          } else if ((nh || hasLandingAhead(world, player, player.x + 40, player.x + 200)) && leapCooldown <= 0) {
+            input.detach = true;
+            leapCooldown = 0.35;
+            pushLog('auto_detach', { reason: 'plat_edge_land' });
+          } else if (mustBail && leapCooldown <= 0) {
+            input.detach = true;
+            leapCooldown = 0.4;
+            pushLog('auto_detach', { reason: 'durability' });
+          } else if (!nearEdge) {
+            input.move = 1;
+          }
+        }
+        return;
+      }
+
+      // Air swing: build rightward arc, detach only into a landing
       input.move = 1;
-      if (player.y > (ctx.H || 600) * 0.62) input.shorten = true;
-      if (a.length > 200) input.shorten = true;
-      if (a.length < 70 && player.y < 120) input.lengthen = true;
-      // Release on a forward swing toward the right
-      const goodAngle = a.angle > 0.45 && a.angle < 1.35 && a.omega > 0.35;
-      const mustBail = a.target.durability < 1.0 || dangerLeft;
-      if ((goodAngle || mustBail) && leapCooldown <= 0) {
+      if (player.y > H * 0.65 || a.length > 210) input.shorten = true;
+      if (a.length < 75 && player.y < 140) input.lengthen = true;
+      const goodAngle = a.angle > 0.55 && a.angle < 1.25 && a.omega > 0.55;
+      const landOk = hasLandingAhead(world, player, player.x + 30, player.x + 220);
+      const mustBail = a.target.durability < 0.9 || dangerLeft;
+      if (((goodAngle && landOk) || (mustBail && landOk) || (mustBail && dangerLeft)) && leapCooldown <= 0) {
         input.detach = true;
-        leapCooldown = 0.35;
+        leapCooldown = 0.4;
+        pushLog('auto_detach', { reason: mustBail ? 'bail' : 'swing', angle: +a.angle.toFixed(2) });
       }
       return;
     }
 
     if (state === 'handle') {
       input.move = 1;
-      if (leapCooldown <= 0) {
+      const nh = nextHandle(world, player, attachedHandle);
+      const np = nextPlatform(world, player);
+      // Wait for a reachable next hang/pad before leaping
+      if (leapCooldown <= 0 && (nh || (np && np.x - player.x < 130))) {
         input.detach = true;
-        leapCooldown = 0.4;
+        leapCooldown = 0.45;
+        pushLog('auto_leap', { reason: nh ? 'handle' : 'platform' });
       }
       return;
     }
 
     if (state === 'ladder') {
-      input.shorten = true; // climb up (shared ↑)
-      input.move = 0;
+      input.shorten = true;
       return;
     }
 
@@ -353,61 +414,86 @@
       return;
     }
 
-    // GROUND / AIR — stay ahead, jump gaps, hang, rope, climb
-    input.move = preferRight ? 1 : sx > W * 0.72 ? -1 : 1;
+    // GROUND / AIR
+    input.move = preferRight ? 1 : sx > W * 0.75 ? -1 : 1;
 
     const lad = ladderAhead(world, player);
     if (lad && state === 'ground' && Math.abs(lad.x - player.x) < 28) {
-      input.shorten = true; // mount
+      input.shorten = true;
       return;
     }
-    if (lad && lad.x > player.x && lad.x - player.x < 70) {
+    if (lad && lad.x > player.x && lad.x - player.x < 80) {
       input.move = 1;
       return;
     }
 
     const nh = nextHandle(world, player, attachedHandle);
-    if (nh && state === 'ground' && nh.x - player.x < 95 && leapCooldown <= 0) {
+    if (nh && state === 'ground' && nh.x - player.x < 90 && leapCooldown <= 0) {
       input.detach = true;
       leapCooldown = 0.35;
       return;
     }
-    if (nh && state === 'air' && nh.x > player.x) {
-      input.move = 1;
-      return;
-    }
-
-    if (state === 'ground' && gapAhead(world, player) && leapCooldown <= 0) {
-      // Prefer rope over blind jump when a target is in range
-      const t = nearestTarget(world, player, true);
-      if (t && fireCooldown <= 0 && !rope.projectile && !rope.attached) {
-        aimAt(input, player, world, t.x, t.y);
-        input.fire = true;
-        fireCooldown = 0.45;
-        pushLog('auto_fire', { reason: 'gap', tx: Math.round(t.x), ty: Math.round(t.y) });
-      } else {
-        input.detach = true;
-        leapCooldown = 0.3;
-        pushLog('auto_jump', { reason: 'gap' });
+    if (nh && state === 'air') {
+      input.move = nh.x >= player.x ? 1 : -1;
+      // Grab will happen via tryGrabHandle; if falling past, shoot rope
+      if (player.vy > 120 && fireCooldown <= 0 && !rope.projectile) {
+        const t = nearestTarget(world, player, true);
+        if (t) {
+          aimAt(input, player, world, t.x, t.y);
+          input.fire = true;
+          fireCooldown = 0.45;
+          pushLog('auto_fire', { reason: 'air_fall' });
+        }
       }
       return;
     }
 
-    // Opportunistic rope toward forward/up target when safe or in air
+    if (state === 'ground' && gapAhead(world, player) && leapCooldown <= 0) {
+      const np = nextPlatform(world, player);
+      const t = nearestTarget(world, player, true);
+      // Jump if next pad is close; else rope
+      if (np && np.x - player.x < 130) {
+        input.detach = true;
+        leapCooldown = 0.3;
+        pushLog('auto_jump', { reason: 'gap_pad' });
+      } else if (t && fireCooldown <= 0 && !rope.projectile && !rope.attached) {
+        aimAt(input, player, world, t.x, t.y);
+        input.fire = true;
+        fireCooldown = 0.5;
+        pushLog('auto_fire', { reason: 'gap_rope' });
+      } else {
+        input.detach = true;
+        leapCooldown = 0.3;
+        pushLog('auto_jump', { reason: 'gap_blind' });
+      }
+      return;
+    }
+
+    // On solid ground with runway ahead: just walk — don't rope spam
+    if (state === 'ground') {
+      const plat = platformUnder(world, player.x, player.y, player.feet);
+      if (plat && player.x < plat.x + plat.w - 50) {
+        input.move = 1;
+        return;
+      }
+    }
+
+    // Emergency rope only when falling / low / left danger
     if (
       fireCooldown <= 0 &&
       !rope.projectile &&
       !rope.attached &&
-      (state === 'ground' || state === 'air')
+      (state === 'air' || dangerLeft)
     ) {
       const t = nearestTarget(world, player, true);
       if (t) {
-        const falling = state === 'air' && player.vy > 80;
-        const low = player.y > (ctx.H || 600) * 0.55;
-        if (falling || low || dangerLeft || (state === 'ground' && sx > W * 0.4)) {
+        const falling = state === 'air' && player.vy > 60;
+        const low = player.y > H * 0.58;
+        if (falling || low || dangerLeft) {
           aimAt(input, player, world, t.x, t.y);
           input.fire = true;
-          fireCooldown = 0.5;
+          fireCooldown = 0.55;
+          pushLog('auto_fire', { reason: dangerLeft ? 'danger' : 'rescue' });
         }
       }
     }
